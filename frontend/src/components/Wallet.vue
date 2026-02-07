@@ -1,0 +1,378 @@
+<template>
+	<div class="wallet">
+		<button
+			class="walletBtn"
+			type="button"
+			:disabled="!hasProvider"
+			@click.stop="onPrimaryClick"
+		>
+			<span v-if="!hasProvider">未检测到钱包</span>
+			<span v-else-if="!isConnected">连接钱包</span>
+			<span v-else>{{ shortAddress }}</span>
+		</button>
+
+		<div v-if="menuOpen && hasProvider" class="menu" @click.stop>
+			<div class="row">
+				<div class="label">网络</div>
+				<div class="value" :class="{ warn: !isOnTargetChain }">
+					{{ networkLabel }}
+				</div>
+			</div>
+
+			<div v-if="isConnected" class="row">
+				<div class="label">地址</div>
+				<div class="value mono">{{ shortAddress }}</div>
+			</div>
+
+			<div class="actions">
+				<button
+					v-if="isConnected"
+					class="actionBtn"
+					type="button"
+					@click="copyAddress"
+				>
+					复制地址
+				</button>
+
+				<button
+					v-if="hasProvider"
+					class="actionBtn"
+					type="button"
+					@click="ensureTargetChain"
+				>
+					切到 Pharos Atlantic
+				</button>
+
+				<button
+					v-if="!isConnected"
+					class="actionBtn primary"
+					type="button"
+					@click="connect"
+				>
+					连接
+				</button>
+
+				<button
+					v-else
+					class="actionBtn danger"
+					type="button"
+					@click="disconnect"
+				>
+					断开
+				</button>
+			</div>
+
+			<div v-if="errorMessage" class="error">{{ errorMessage }}</div>
+		</div>
+	</div>
+</template>
+
+<script setup>
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+
+// Pharos Atlantic Testnet (from user input)
+// - chainId: 688689
+// - rpc: https://atlantic.dplabs-internal.com
+// - explorer: https://atlantic.pharosscan.xyz
+// NOTE: nativeCurrency 的 symbol/name 如果与你们链配置不一致，可在这里改。
+const TARGET_CHAIN = {
+	chainId: 688689,
+	chainName: "Pharos Atlantic Testnet",
+	rpcUrls: ["https://atlantic.dplabs-internal.com"],
+	blockExplorerUrls: ["https://atlantic.pharosscan.xyz"],
+	nativeCurrency: {
+		name: "Pharos",
+		symbol: "PHAR",
+		decimals: 18,
+	},
+};
+
+const hasProvider = computed(() => typeof window !== "undefined" && !!window.ethereum);
+
+const account = ref("");
+const chainIdHex = ref("");
+const menuOpen = ref(false);
+const errorMessage = ref("");
+
+const isConnected = computed(() => !!account.value);
+const targetChainIdHex = computed(() => toChainIdHex(TARGET_CHAIN.chainId));
+const isOnTargetChain = computed(() => {
+	if (!chainIdHex.value) return false;
+	return normalizeHex(chainIdHex.value) === normalizeHex(targetChainIdHex.value);
+});
+
+const shortAddress = computed(() => {
+	if (!account.value) return "";
+	return `${account.value.slice(0, 6)}…${account.value.slice(-4)}`;
+});
+
+const networkLabel = computed(() => {
+	if (!chainIdHex.value) return "未知";
+	if (isOnTargetChain.value) return TARGET_CHAIN.chainName;
+	return `非目标网络 (${chainIdHex.value})`;
+});
+
+function toChainIdHex(chainId) {
+	return `0x${Number(chainId).toString(16)}`;
+}
+
+function normalizeHex(hex) {
+	try {
+		return `0x${BigInt(hex).toString(16)}`;
+	} catch {
+		return String(hex || "").toLowerCase();
+	}
+}
+
+async function refreshState() {
+	errorMessage.value = "";
+	if (!window.ethereum) return;
+
+	const [accounts, currentChainId] = await Promise.all([
+		window.ethereum.request({ method: "eth_accounts" }),
+		window.ethereum.request({ method: "eth_chainId" }),
+	]);
+
+	account.value = accounts?.[0] ?? "";
+	chainIdHex.value = currentChainId ?? "";
+}
+
+async function connect() {
+	errorMessage.value = "";
+	if (!window.ethereum) {
+		errorMessage.value = "未检测到钱包扩展（如 MetaMask）。";
+		return;
+	}
+
+	try {
+		const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+		account.value = accounts?.[0] ?? "";
+		chainIdHex.value = await window.ethereum.request({ method: "eth_chainId" });
+
+		await ensureTargetChain();
+	} catch (err) {
+		errorMessage.value = humanizeProviderError(err);
+	}
+}
+
+async function ensureTargetChain() {
+	errorMessage.value = "";
+	if (!window.ethereum) return;
+
+	try {
+		const current = (await window.ethereum.request({ method: "eth_chainId" })) ?? "";
+		chainIdHex.value = current;
+		if (normalizeHex(current) === normalizeHex(targetChainIdHex.value)) return;
+
+		try {
+			await window.ethereum.request({
+				method: "wallet_switchEthereumChain",
+				params: [{ chainId: targetChainIdHex.value }],
+			});
+		} catch (switchErr) {
+			// 4902: unknown chain
+			if (switchErr?.code === 4902 || String(switchErr?.message || "").includes("4902")) {
+				await window.ethereum.request({
+					method: "wallet_addEthereumChain",
+					params: [
+						{
+							chainId: targetChainIdHex.value,
+							chainName: TARGET_CHAIN.chainName,
+							rpcUrls: TARGET_CHAIN.rpcUrls,
+							blockExplorerUrls: TARGET_CHAIN.blockExplorerUrls,
+							nativeCurrency: TARGET_CHAIN.nativeCurrency,
+						},
+					],
+				});
+				await window.ethereum.request({
+					method: "wallet_switchEthereumChain",
+					params: [{ chainId: targetChainIdHex.value }],
+				});
+			} else {
+				throw switchErr;
+			}
+		}
+
+		chainIdHex.value = await window.ethereum.request({ method: "eth_chainId" });
+	} catch (err) {
+		errorMessage.value = humanizeProviderError(err);
+	}
+}
+
+function disconnect() {
+	// EIP-1193 provider 通常不支持程序化断开，这里只清理本地状态
+	menuOpen.value = false;
+	account.value = "";
+	errorMessage.value = "";
+}
+
+async function copyAddress() {
+	if (!account.value) return;
+	try {
+		await navigator.clipboard.writeText(account.value);
+	} catch {
+		// ignore
+	}
+}
+
+function onPrimaryClick() {
+	if (!hasProvider.value) return;
+
+	if (!isConnected.value) {
+		connect();
+		return;
+	}
+
+	menuOpen.value = !menuOpen.value;
+}
+
+function onDocClick() {
+	menuOpen.value = false;
+}
+
+function humanizeProviderError(err) {
+	if (!err) return "操作失败";
+	if (err?.code === 4001) return "用户取消了操作";
+	if (typeof err?.message === "string" && err.message.trim()) return err.message;
+	return "操作失败";
+}
+
+function onAccountsChanged(accounts) {
+	account.value = accounts?.[0] ?? "";
+}
+
+function onChainChanged(newChainId) {
+	chainIdHex.value = newChainId ?? "";
+}
+
+onMounted(async () => {
+	if (window.ethereum?.on) {
+		window.ethereum.on("accountsChanged", onAccountsChanged);
+		window.ethereum.on("chainChanged", onChainChanged);
+	}
+	document.addEventListener("click", onDocClick);
+	await refreshState();
+});
+
+onBeforeUnmount(() => {
+	document.removeEventListener("click", onDocClick);
+	if (window.ethereum?.removeListener) {
+		window.ethereum.removeListener("accountsChanged", onAccountsChanged);
+		window.ethereum.removeListener("chainChanged", onChainChanged);
+	}
+});
+</script>
+
+<style scoped>
+.wallet {
+	position: relative;
+	display: inline-block;
+}
+
+.walletBtn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	height: 36px;
+	padding: 0 12px;
+	border: 1px solid #ccc;
+	border-radius: 999px;
+	background: white;
+	cursor: pointer;
+	font-size: 14px;
+	font-weight: 600;
+	line-height: 1;
+	user-select: none;
+}
+
+.walletBtn:hover {
+	border-color: #999;
+}
+
+.walletBtn:active {
+	border-color: #666;
+}
+
+.walletBtn:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.menu {
+	position: absolute;
+	right: 0;
+	margin-top: 8px;
+	width: 260px;
+	border: 1px solid #ccc;
+	border-radius: 12px;
+	background: white;
+	padding: 12px;
+	z-index: 10;
+}
+
+.row {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 6px 0;
+}
+
+.label {
+	color: #666;
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.value {
+	text-align: right;
+	font-size: 12px;
+}
+
+.warn {
+	color: #b45309;
+}
+
+.mono {
+	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+		monospace;
+}
+
+.actions {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 8px;
+	margin-top: 10px;
+}
+
+.actionBtn {
+	height: 34px;
+	padding: 0 10px;
+	border: 1px solid #ccc;
+	border-radius: 10px;
+	background: white;
+	cursor: pointer;
+	font-size: 13px;
+	font-weight: 600;
+	text-align: left;
+}
+
+.actionBtn:hover {
+	border-color: #999;
+}
+
+.actionBtn.primary {
+	border-color: #999;
+}
+
+.actionBtn.danger {
+	border-color: #c2410c;
+}
+
+.error {
+	margin-top: 10px;
+	color: #b91c1c;
+	font-size: 12px;
+	word-break: break-word;
+}
+</style>
