@@ -5,12 +5,15 @@
     </div>
 
     <KlineChart />
+
+    <Coins />
   </div>
 </template>
 
 <script setup>
 import KlineChart from "./components/KlineChart.vue";
 import Wallet from "./components/Wallet.vue";
+import Coins from "./components/Coins.vue";
 </script>
 
 <style scoped>

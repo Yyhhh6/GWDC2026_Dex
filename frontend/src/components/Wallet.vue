@@ -70,22 +70,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 
-// Pharos Atlantic Testnet (from user input)
-// - chainId: 688689
-// - rpc: https://atlantic.dplabs-internal.com
-// - explorer: https://atlantic.pharosscan.xyz
-// NOTE: nativeCurrency 的 symbol/name 如果与你们链配置不一致，可在这里改。
-const TARGET_CHAIN = {
-	chainId: 688689,
-	chainName: "Pharos Atlantic Testnet",
-	rpcUrls: ["https://atlantic.dplabs-internal.com"],
-	blockExplorerUrls: ["https://atlantic.pharosscan.xyz"],
-	nativeCurrency: {
-		name: "Pharos",
-		symbol: "PHAR",
-		decimals: 18,
-	},
-};
+import { PHAROS_ATLANTIC as TARGET_CHAIN } from "../lib/pharos";
 
 const hasProvider = computed(() => typeof window !== "undefined" && !!window.ethereum);
 
