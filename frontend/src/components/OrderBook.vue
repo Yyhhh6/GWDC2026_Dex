@@ -1,525 +1,368 @@
 <template>
-<div class="order-book">
-    <!-- 订单簿标题 -->
-    <div class="orderbook-header">
-    <h3 class="title">订单簿</h3>
-    <div class="depth-toggle">
-        <button
-        :class="['depth-btn', { active: depth === 0 }]"
-        @click="depth = 0"
-        >
-        全部
-        </button>
-        <button
-        :class="['depth-btn', { active: depth === 10 }]"
-        @click="depth = 10"
-        >
-        10档
-        </button>
-        <button
-        :class="['depth-btn', { active: depth === 20 }]"
-        @click="depth = 20"
-        >
-        20档
-        </button>
-    </div>
-    </div>
-
-    <!-- 订单簿表格头部 -->
-    <div class="orderbook-table-header">
-    <div class="header-cell price">价格</div>
-    <div class="header-cell amount">数量</div>
-    <div class="header-cell total">总额</div>
-    </div>
-
-    <!-- 卖单 (红色，从高到低) -->
-    <div class="sell-orders">
-    <div
-        v-for="(order, index) in limitedSellOrders"
-        :key="'sell-' + index"
-        class="order-row sell-order"
-        @click="selectOrder(order)"
-    >
-        <div class="order-cell price sell-color">
-        ${{ order.price.toFixed(6) }}
+    <div class="ob">
+      <!-- header -->
+      <div class="ob__head">
+        <div class="ob__title">
+          <span class="ob__badge">DEPTH</span>
+          <span class="ob__name">订单簿</span>
         </div>
-        <div class="order-cell amount">
-        {{ order.amount.toFixed(2) }}
+  
+        <div class="ob__meta">
+          <div class="ob__metaRow">
+            <span class="k">Wallet</span>
+            <span class="v mono">{{ short(walletAddress) }}</span>
+          </div>
+          <div class="ob__metaRow">
+            <span class="k">Base</span>
+            <span class="v mono">{{ short(baseAddress) }}</span>
+          </div>
+          <div class="ob__metaRow">
+            <span class="k">Symbol</span>
+            <span class="v mono">{{ baseSymbol || "—" }}</span>
+          </div>
         </div>
-        <div class="order-cell total">
-        ${{ (order.price * order.amount).toFixed(4) }}
+      </div>
+  
+      <!-- column header -->
+      <div class="ob__cols">
+        <div class="c price">价格(USDT)</div>
+        <div class="c amount">数量({{ baseSymbol || "—" }})</div>
+      </div>
+  
+      <!-- sells (ask) -->
+      <div class="ob__side ob__side--sell">
+        <div v-for="(r, i) in asks" :key="'ask-' + i" class="ob__row">
+          <div class="ob__bar ob__bar--sell" :style="{ width: r.bar + '%' }"></div>
+  
+          <div class="cell price sell">{{ fmt(r.p, 6) }}</div>
+          <div class="cell amount">{{ fmt(r.a, 2) }}</div>
         </div>
-        <!-- 深度条 -->
-        <div
-        class="depth-bar sell-depth"
-        :style="{ width: order.depthPercent + '%' }"
-        ></div>
-    </div>
-    </div>
-
-    <!-- 当前市场价格分隔线 -->
-    <div class="current-price-line">
-    <div class="current-info">
-        <div class="price-info">
-        <span class="price-label">最新价格</span>
-        <span :class="['current-price', priceChange >= 0 ? 'positive' : 'negative']">
-            ${{ currentPrice.toFixed(6) }}
-        </span>
-        <span :class="['price-change', priceChange >= 0 ? 'positive' : 'negative']">
-            {{ priceChange >= 0 ? '+' : '' }}{{ priceChangePercent.toFixed(2) }}%
-        </span>
+      </div>
+  
+      <!-- mid price -->
+      <div class="ob__mid">
+        <div class="ob__midLeft">
+          <span class="lbl">最新</span>
+          <span class="px" :class="midUp ? 'up' : 'down'">
+            {{ fmt(midPrice, 6) }}
+          </span>
         </div>
-        <div class="volume-info">
-        <span class="volume-label">成交量</span>
-        <span class="volume-value">{{ formatVolume(totalVolume) }}</span>
+        <div class="ob__midRight">
+          <span class="chip">Ask x5</span>
+          <span class="dot"></span>
+          <span class="chip">Bid x5</span>
         </div>
-    </div>
-    </div>
-
-    <!-- 买单 (绿色，从低到高) -->
-    <div class="buy-orders">
-    <div
-        v-for="(order, index) in limitedBuyOrders"
-        :key="'buy-' + index"
-        class="order-row buy-order"
-        @click="selectOrder(order)"
-    >
-        <div class="order-cell price buy-color">
-        ${{ order.price.toFixed(6) }}
+      </div>
+  
+      <!-- buys (bid) -->
+      <div class="ob__side ob__side--buy">
+        <div v-for="(r, i) in bids" :key="'bid-' + i" class="ob__row">
+          <div class="ob__bar ob__bar--buy" :style="{ width: r.bar + '%' }"></div>
+  
+          <div class="cell price buy">{{ fmt(r.p, 6) }}</div>
+          <div class="cell amount">{{ fmt(r.a, 2) }}</div>
         </div>
-        <div class="order-cell amount">
-        {{ order.amount.toFixed(2) }}
-        </div>
-        <div class="order-cell total">
-        ${{ (order.price * order.amount).toFixed(4) }}
-        </div>
-        <!-- 深度条 -->
-        <div
-        class="depth-bar buy-depth"
-        :style="{ width: order.depthPercent + '%' }"
-        ></div>
+      </div>
     </div>
-    </div>
-
-    <!-- 汇总统计 -->
-    <div class="orderbook-summary">
-    <div class="summary-item">
-        <span class="label">买量</span>
-        <span class="value buy-color">{{ totalBuyVolume.toFixed(2) }}</span>
-    </div>
-    <div class="summary-item">
-        <span class="label">卖量</span>
-        <span class="value sell-color">{{ totalSellVolume.toFixed(2) }}</span>
-    </div>
-    <div class="summary-item">
-        <span class="label">价差</span>
-        <span class="value">{{ spread.toFixed(6) }}</span>
-    </div>
-    </div>
-</div>
-</template>
-
-<script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
-
-const emit = defineEmits(['orderSelected']);
-
-// 订单簿数据
-const buyOrders = ref([]);
-const sellOrders = ref([]);
-const currentPrice = ref(0.000124);
-const priceChange = ref(0.000002);
-const priceChangePercent = ref(1.63);
-const totalVolume = ref(1250000);
-const depth = ref(0); // 0=全部, 10=10档, 20=20档
-
-// 生成模拟订单簿数据
-const generateOrderBookData = () => {
-const basePrice = currentPrice.value;
-const buyData = [];
-const sellData = [];
-
-// 生成买单 (价格从低到高)
-for (let i = 10; i >= 1; i--) {
-    const price = basePrice - (i * 0.000001);
-    const amount = Math.random() * 5000 + 500;
-    buyData.push({
-    price,
-    amount,
-    total: price * amount
-    });
-}
-
-// 生成卖单 (价格从高到低)
-for (let i = 1; i <= 10; i++) {
-    const price = basePrice + (i * 0.000001);
-    const amount = Math.random() * 5000 + 500;
-    sellData.push({
-    price,
-    amount,
-    total: price * amount
-    });
-}
-
-// 计算深度百分比
-const maxBuyVolume = Math.max(...buyData.map(o => o.amount));
-const maxSellVolume = Math.max(...sellData.map(o => o.amount));
-
-buyData.forEach(order => {
-    order.depthPercent = (order.amount / maxBuyVolume) * 100;
-});
-
-sellData.forEach(order => {
-    order.depthPercent = (order.amount / maxSellVolume) * 100;
-});
-
-buyOrders.value = buyData;
-sellOrders.value = sellData.reverse(); // 卖单从高到低排列
-};
-
-// 根据深度设置限制订单数量
-const limitedBuyOrders = computed(() => {
-if (depth.value === 0) return buyOrders.value;
-return buyOrders.value.slice(-depth.value);
-});
-
-const limitedSellOrders = computed(() => {
-if (depth.value === 0) return sellOrders.value;
-return sellOrders.value.slice(0, depth.value);
-});
-
-// 计算总量
-const totalBuyVolume = computed(() => {
-return limitedBuyOrders.value.reduce((sum, order) => sum + order.amount, 0);
-});
-
-const totalSellVolume = computed(() => {
-return limitedSellOrders.value.reduce((sum, order) => sum + order.amount, 0);
-});
-
-// 计算价差
-const spread = computed(() => {
-if (sellOrders.value.length > 0 && buyOrders.value.length > 0) {
-    const bestSell = sellOrders.value[sellOrders.value.length - 1];
-    const bestBuy = buyOrders.value[buyOrders.value.length - 1];
-    return bestSell.price - bestBuy.price;
-}
-return 0;
-});
-
-// 格式化成交量
-const formatVolume = (volume) => {
-if (volume >= 1000000) {
-    return (volume / 1000000).toFixed(2) + 'M';
-} else if (volume >= 1000) {
-    return (volume / 1000).toFixed(2) + 'K';
-}
-return volume.toString();
-};
-
-// 选择订单 (点击时填充到交易表单)
-const selectOrder = (order) => {
-emit('orderSelected', {
-    price: order.price,
-    amount: order.amount
-});
-};
-
-// 模拟实时更新
-let updateInterval;
-
-const startRealTimeUpdates = () => {
-updateInterval = setInterval(() => {
-    // 随机更新价格
-    const priceChange = (Math.random() - 0.5) * 0.000002;
-    currentPrice.value = Math.max(0.000001, currentPrice.value + priceChange);
-
-    // 随机更新部分订单
-    if (buyOrders.value.length > 0) {
-    const randomIndex = Math.floor(Math.random() * buyOrders.value.length);
-    const order = buyOrders.value[randomIndex];
-    const amountChange = (Math.random() - 0.5) * 1000;
-    order.amount = Math.max(100, order.amount + amountChange);
-    order.total = order.price * order.amount;
-    }
-
-    if (sellOrders.value.length > 0) {
-    const randomIndex = Math.floor(Math.random() * sellOrders.value.length);
-    const order = sellOrders.value[randomIndex];
-    const amountChange = (Math.random() - 0.5) * 1000;
-    order.amount = Math.max(100, order.amount + amountChange);
-    order.total = order.price * order.amount;
-    }
-
-    // 更新成交量
-    totalVolume.value += Math.floor(Math.random() * 10000);
-
-}, 2000); // 每2秒更新一次
-};
-
-const stopRealTimeUpdates = () => {
-if (updateInterval) {
-    clearInterval(updateInterval);
-}
-};
-
-onMounted(() => {
-generateOrderBookData();
-startRealTimeUpdates();
-});
-
-onUnmounted(() => {
-stopRealTimeUpdates();
-});
-</script>
+  </template>
+  
+  <script setup>
+  import { computed, ref } from "vue";
+  
+  const props = defineProps({
+    walletAddress: { type: String, default: "" },
+    baseAddress: { type: String, default: "" },
+    baseSymbol: { type: String, default: "" },
+  });
+  
+  const { walletAddress, baseAddress, baseSymbol } = props;
+  
+  function short(addr) {
+    const a = String(addr || "");
+    if (!a || a.length < 10) return a || "—";
+    return `${a.slice(0, 6)}…${a.slice(-4)}`;
+  }
+  
+  function fmt(x, d = 2) {
+    const n = Number(x);
+    if (!Number.isFinite(n)) return "—";
+    return n.toFixed(d);
+  }
+  
+  /* mock data */
+  const midPrice = ref(0.123456);
+  const prevMid = ref(0.123200);
+  
+  const asks = ref([
+    { p: 0.123960, a: 1200, bar: 22 },
+    { p: 0.123880, a: 2400, bar: 44 },
+    { p: 0.123800, a: 1800, bar: 33 },
+    { p: 0.123720, a: 3200, bar: 58 },
+    { p: 0.123640, a: 5500, bar: 100 },
+  ]);
+  
+  const bids = ref([
+    { p: 0.123360, a: 1300, bar: 24 },
+    { p: 0.123280, a: 2600, bar: 48 },
+    { p: 0.123200, a: 1900, bar: 35 },
+    { p: 0.123120, a: 3400, bar: 62 },
+    { p: 0.123040, a: 5200, bar: 100 },
+  ]);
+  
+  const bestAsk = computed(() => asks.value?.[asks.value.length - 1]?.p ?? 0);
+  const bestBid = computed(() => bids.value?.[0]?.p ?? 0);
+  
+  const spread = computed(() => {
+    const s = Number(bestAsk.value) - Number(bestBid.value);
+    return Number.isFinite(s) ? Math.max(0, s) : 0;
+  });
+  
+  const midUp = computed(() => Number(midPrice.value) >= Number(prevMid.value));
+  </script>
 
 <style lang="scss" scoped>
-.order-book {
-background: #1a1a1a;
-border-radius: 12px;
-padding: 16px;
-border: 1px solid #333;
+.ob {
+--bg: #0b0f14;
+--panel2: rgba(255, 255, 255, 0.04);
+--text: rgba(255, 255, 255, 0.92);
+--muted: rgba(255, 255, 255, 0.55);
 
-.orderbook-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16px;
-
-    .title {
-    font-size: 14px;
-    font-weight: 600;
-    color: #fff;
-    }
-
-    .depth-toggle {
-    display: flex;
-    gap: 4px;
-
-    .depth-btn {
-        padding: 4px 8px;
-        background: #0d0d0d;
-        border: 1px solid #333;
-        border-radius: 4px;
-        color: #888;
-        font-size: 11px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-
-        &:hover {
-        color: #fff;
-        border-color: #555;
-        }
-
-        &.active {
-        background: #65c281;
-        color: #000;
-        border-color: #65c281;
-        }
-    }
-    }
+background: radial-gradient(900px 520px at 15% 0%, rgba(0, 208, 132, 0.12), transparent 55%),
+            radial-gradient(820px 520px at 95% 5%, rgba(255, 59, 105, 0.12), transparent 60%),
+            var(--bg);
+border: 1px solid rgba(255, 255, 255, 0.09);
+border-radius: 14px;
+padding: 14px;
+color: var(--text);
+max-width: 520px;
 }
 
-.orderbook-table-header {
-    display: flex;
-    padding: 8px 0;
-    border-bottom: 1px solid #333;
-    font-size: 11px;
-    color: #888;
-
-    .header-cell {
-    flex: 1;
-    text-align: center;
-
-    &.price {
-        flex: 1.2;
-        text-align: left;
-    }
-    }
+.mono {
+font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
-.sell-orders {
-    max-height: 180px;
-    overflow-y: auto;
-    margin-bottom: 8px;
+.ob__head {
+display: flex;
+justify-content: space-between;
+gap: 12px;
+margin-bottom: 10px;
 }
 
-.current-price-line {
-    background: #0d0d0d;
-    border-radius: 8px;
-    padding: 12px;
-    margin: 12px 0;
-    border: 1px solid #333;
-
-    .current-info {
-    .price-info {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 4px;
-
-        .price-label {
-        font-size: 11px;
-        color: #888;
-        }
-
-        .current-price {
-        font-size: 16px;
-        font-weight: bold;
-
-        &.positive {
-            color: #00d084;
-        }
-
-        &.negative {
-            color: #ff3b69;
-        }
-        }
-
-        .price-change {
-        font-size: 12px;
-
-        &.positive {
-            color: #00d084;
-        }
-
-        &.negative {
-            color: #ff3b69;
-        }
-        }
-    }
-
-    .volume-info {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-
-        .volume-label {
-        font-size: 11px;
-        color: #888;
-        }
-
-        .volume-value {
-        font-size: 12px;
-        color: #fff;
-        }
-    }
-    }
+.ob__title {
+display: flex;
+align-items: center;
+gap: 10px;
 }
 
-.buy-orders {
-    max-height: 180px;
-    overflow-y: auto;
-    margin-top: 8px;
+.ob__badge {
+padding: 4px 8px;
+border-radius: 999px;
+font-weight: 900;
+font-size: 11px;
+letter-spacing: 0.12em;
+background: linear-gradient(90deg, rgba(0, 208, 132, 0.22), rgba(86, 195, 255, 0.16));
+border: 1px solid rgba(255, 255, 255, 0.10);
 }
 
-.order-row {
-    position: relative;
-    display: flex;
-    align-items: center;
-    padding: 6px 0;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
+.ob__name {
+font-size: 15px;
+font-weight: 900;
+}
 
-    &:hover {
-    background: rgba(255, 255, 255, 0.05);
-    }
+.ob__meta {
+display: flex;
+flex-direction: column;
+gap: 6px;
+min-width: 220px;
+}
 
-    .order-cell {
-    flex: 1;
-    text-align: center;
+.ob__metaRow {
+display: flex;
+justify-content: space-between;
+gap: 10px;
+background: var(--panel2);
+border: 1px solid rgba(255, 255, 255, 0.08);
+border-radius: 10px;
+padding: 8px 10px;
+
+.k {
     font-size: 12px;
-    position: relative;
-    z-index: 2;
-
-    &.price {
-        flex: 1.2;
-        text-align: left;
-        font-weight: 500;
-    }
-
-    &.sell-color {
-        color: #ff3b69;
-    }
-
-    &.buy-color {
-        color: #00d084;
-    }
-    }
-
-    .depth-bar {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    opacity: 0.1;
-    z-index: 1;
-
-    &.sell-depth {
-        background: linear-gradient(to right, #ff3b69, transparent);
-    }
-
-    &.buy-depth {
-        background: linear-gradient(to right, #00d084, transparent);
-    }
-    }
+    color: var(--muted);
+}
+.v {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.88);
+}
 }
 
-.orderbook-summary {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 0 0;
-    border-top: 1px solid #333;
-    margin-top: 12px;
+/* column header (2 cols) */
+.ob__cols {
+display: grid;
+grid-template-columns: 1.2fr 1fr;
+padding: 8px 10px;
+border: 1px solid rgba(255, 255, 255, 0.08);
+background: rgba(255, 255, 255, 0.04);
+border-radius: 12px;
+margin-bottom: 10px;
 
-    .summary-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-
-    .label {
-        font-size: 10px;
-        color: #888;
-        margin-bottom: 2px;
-    }
-
-    .value {
-        font-size: 12px;
-        font-weight: 600;
-        color: #fff;
-
-        &.buy-color {
-        color: #00d084;
-        }
-
-        &.sell-color {
-        color: #ff3b69;
-        }
-    }
-    }
+.c {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.55);
+    font-weight: 800;
+    letter-spacing: 0.04em;
+}
+.price { text-align: left; }
+.amount { text-align: right; }
 }
 
-// 滚动条样式
-.sell-orders::-webkit-scrollbar,
-.buy-orders::-webkit-scrollbar {
-    width: 4px;
+.ob__side {
+display: flex;
+flex-direction: column;
+gap: 6px;
 }
 
-.sell-orders::-webkit-scrollbar-track,
-.buy-orders::-webkit-scrollbar-track {
-    background: transparent;
+.ob__side--buy {
+margin-top: 10px;
 }
 
-.sell-orders::-webkit-scrollbar-thumb,
-.buy-orders::-webkit-scrollbar-thumb {
-    background: #333;
-    border-radius: 2px;
+/* row (2 cols) */
+.ob__row {
+position: relative;
+display: grid;
+grid-template-columns: 1.2fr 1fr;
+align-items: center;
+padding: 8px 10px;
+border-radius: 12px;
+background: rgba(255, 255, 255, 0.03);
+border: 1px solid rgba(255, 255, 255, 0.06);
+overflow: hidden;
+cursor: pointer;
+transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
 
-    &:hover {
-    background: #555;
-    }
+.ob__row:hover {
+transform: translateY(-1px);
+border-color: rgba(255, 255, 255, 0.12);
+background: rgba(255, 255, 255, 0.05);
+}
+
+/* depth bar */
+.ob__bar {
+position: absolute;
+top: 0;
+bottom: 0;
+right: 0;
+opacity: 0.14;
+pointer-events: none;
+}
+
+.ob__bar--sell {
+background: linear-gradient(90deg, transparent 0%, rgba(255, 59, 105, 0.55) 100%);
+}
+
+.ob__bar--buy {
+background: linear-gradient(90deg, transparent 0%, rgba(0, 208, 132, 0.55) 100%);
+}
+
+.cell {
+position: relative;
+z-index: 1;
+font-size: 12px;
+font-weight: 700;
+}
+
+.cell.price { text-align: left; }
+.cell.amount { text-align: right; color: rgba(255, 255, 255, 0.82); font-weight: 650; }
+
+.sell { color: rgba(255, 59, 105, 0.95); }
+.buy { color: rgba(0, 208, 132, 0.95); }
+
+/* mid */
+.ob__mid {
+margin: 10px 0;
+padding: 10px 12px;
+border-radius: 14px;
+border: 1px solid rgba(255, 255, 255, 0.10);
+background: rgba(0, 0, 0, 0.30);
+display: flex;
+align-items: center;
+justify-content: space-between;
+gap: 10px;
+}
+
+.ob__midLeft {
+display: flex;
+align-items: baseline;
+gap: 10px;
+
+.lbl {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.55);
+    font-weight: 800;
+    letter-spacing: 0.04em;
+}
+
+.px {
+    font-size: 16px;
+    font-weight: 900;
+    letter-spacing: 0.02em;
+}
+
+.px.up { color: rgba(0, 208, 132, 0.95); }
+.px.down { color: rgba(255, 59, 105, 0.95); }
+}
+
+.ob__midRight {
+display: flex;
+align-items: center;
+gap: 10px;
+
+.chip {
+    font-size: 11px;
+    font-weight: 900;
+    color: rgba(255, 255, 255, 0.78);
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(86, 195, 255, 0.85);
+    box-shadow: 0 0 14px rgba(86, 195, 255, 0.35);
+}
+}
+
+/* footer */
+.ob__foot {
+margin-top: 12px;
+display: grid;
+grid-template-columns: 1fr 1fr 1fr;
+gap: 10px;
+}
+
+.ob__footItem {
+padding: 10px 12px;
+border-radius: 12px;
+background: rgba(255, 255, 255, 0.04);
+border: 1px solid rgba(255, 255, 255, 0.08);
+display: flex;
+flex-direction: column;
+gap: 4px;
+
+.k {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.55);
+    font-weight: 800;
+    letter-spacing: 0.04em;
+}
+.v {
+    font-size: 13px;
+    font-weight: 900;
+    color: rgba(255, 255, 255, 0.90);
 }
 }
 </style>
