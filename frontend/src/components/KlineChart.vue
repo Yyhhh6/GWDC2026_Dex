@@ -18,12 +18,12 @@
       </div> -->
     </div>
 
-    <div id="chart_box" class="chart"></div>
+    <div ref="chartEl" class="chart"></div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onBeforeUnmount, onMounted } from 'vue';
 import { init } from 'klinecharts';
 import { ethers } from 'ethers';
 
@@ -50,9 +50,12 @@ const timeframes = Object.entries(timeframeConfigs).map(
 
 const active = ref('5M')
 
+const chartEl = ref(null)
+
 /* ========= chart ========= */
 let chart = null
 let hasRenderedData = false
+let isDestroyed = false
 
 /* ========= DEX / Contract ========= */
 const DEX = '0x887D9Af1241a176107d31Bb3C69787DFff6dbaD8'
@@ -178,13 +181,19 @@ let tickTimer = null
 const startTick = () => {
   stopTick()
   tickTimer = setInterval(async () => {
-    const price = await fetchLatestPrice()
-    const nowMs = Date.now()
+    if (isDestroyed) return
+    try {
+      const price = await fetchLatestPrice()
+      if (isDestroyed) return
+      const nowMs = Date.now()
 
-    latestPrice.value = price
-    priceHistory.value.push({ timestamp: nowMs, price })
-    pushTickToCandle(price, nowMs)
-    renderLatestCandle()
+      latestPrice.value = price
+      priceHistory.value.push({ timestamp: nowMs, price })
+      pushTickToCandle(price, nowMs)
+      renderLatestCandle()
+    } catch {
+      // ignore: 避免定时器异常导致组件卸载/路由切换被影响
+    }
   }, 1000)
 }
 
@@ -202,8 +211,13 @@ const changeTimeframe = (tf) => {
 
 /* ========= lifecycle ========= */
 onMounted(() => {
+  isDestroyed = false
   // 初始化图表
-  chart = init("chart_box");
+  try {
+    chart = chartEl.value ? init(chartEl.value) : null
+  } catch {
+    chart = null
+  }
 
   // 设置图表样式
   const styles = {
@@ -268,11 +282,19 @@ onMounted(() => {
   startTick()
 })
 
-onUnmounted(() => {
+onBeforeUnmount(() => {
+  isDestroyed = true
   stopTick()
-  chart?.dispose()
+  try {
+    if (chart && typeof chart.dispose === 'function') chart.dispose()
+    else if (chart && typeof chart.destroy === 'function') chart.destroy()
+  } catch {
+    // ignore
+  }
   chart = null
   hasRenderedData = false
+  provider = null
+  dex = null
 })
 </script>
 
