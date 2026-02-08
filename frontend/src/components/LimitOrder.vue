@@ -75,7 +75,7 @@
   
   <script setup>
   import { computed, onMounted, ref, toRefs, watch } from "vue";
-  import { formatUnits, isAddress } from "ethers";
+  import { formatUnits, isAddress, ethers } from "ethers";
 
   import { callDex } from "../lib/dex";
   
@@ -133,6 +133,70 @@
   } finally {
     loading.value = false;
   }
+  }
+
+  // ====== tx state (for cancel) ======
+  const txBusy = ref(false);
+  const statusText = ref("ready"); // 可选：如果你不展示也没关系
+
+  // ====== tx helpers (cancel) ======
+  async function sendTx(buildTx, label) {
+    if (disabled.value) return;
+
+    try {
+      txBusy.value = true;
+      statusText.value = `${label}: sending...`;
+      error.value = "";
+
+      const from = String(walletAddress.value || "").trim();
+      if (!isAddress(from)) throw new Error("Invalid walletAddress");
+
+      const tx = await buildTx();          // 发送交易
+      if (tx?.wait) await tx.wait();       // 等确认（兼容 ethers v6 交易对象）
+
+      statusText.value = `✅ ${label} confirmed`;
+      await refresh();                     // 刷新订单列表
+    } catch (e) {
+      console.error(e);
+      const msg = e?.shortMessage || e?.message || String(e);
+      statusText.value = `${label} error: ${msg}`;
+      error.value = msg; // 你页面里有 error 区域，直接复用
+    } finally {
+      txBusy.value = false;
+    }
+  }
+
+  // ✅ one-click cancel from list (改这里)
+  function cancelOrderById(orderId) {
+    const id = BigInt(String(orderId || "0"));
+    if (id <= 0n) return;
+
+    return sendTx(
+      async () => {
+        const dexWrite = await ensureDexWrite();
+        return dexWrite.cancelOrder(id);
+      },
+      `Cancel Order #${String(id)}`
+    );
+  }
+
+  const DEX_ADDRESS = "0x887D9Af1241a176107d31Bb3C69787DFff6dbaD8";
+  const DEX_ABI = ["function cancelOrder(uint256 orderId)"];
+
+  let _provider;
+  let _signer;
+  let _dexWrite;
+
+  async function ensureDexWrite() {
+    if (_dexWrite) return _dexWrite;
+    if (!window.ethereum) throw new Error("MetaMask not found");
+
+    _provider = new ethers.BrowserProvider(window.ethereum);
+    await _provider.send("eth_requestAccounts", []);
+    _signer = await _provider.getSigner();
+
+    _dexWrite = new ethers.Contract(DEX_ADDRESS, DEX_ABI, _signer);
+    return _dexWrite;
   }
   
   function short(addr) {
