@@ -1,5 +1,5 @@
 <template>
-  <KlineChart />
+  <KlineChart memeId="65f123456789abcdef000001" />
 </template>
 
 <script setup>
