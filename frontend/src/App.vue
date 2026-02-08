@@ -1,5 +1,9 @@
 <template>
-  <KlineChart memeId="65f123456789abcdef000001" />
+  <KlineChart 
+      :wallet-address="walletAddress"
+      :base-address="baseAddress"
+      :base-symbol="baseSymbol"
+    />
   
   <div class="app">
     <OrderBook
@@ -30,12 +34,13 @@ import { ref } from "vue";
 import OrderBook from "./components/OrderBook.vue";
 import TradingPanel from "./components/TradingPanel.vue";
 import LimitOrder from "./components/LimitOrder.vue";
+import KlineChart from "./components/KlineChart.vue"
 
 /**
  * === 全局共享状态（后续可替换为 wallet store / wagmi / web3modal）===
  */
 const walletAddress = ref(
-  "0xc025e1df5e5d8ea7f79e183390ae34646ffddb9a"
+  "0x6ef21168651051cbd1796488f7d49b44cc2442e8"
 );
 
 const baseAddress = ref(

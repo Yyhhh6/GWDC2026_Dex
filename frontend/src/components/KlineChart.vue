@@ -1,154 +1,178 @@
 <template>
-  <div class="trading-chart">
-    <!-- 时间周期 -->
-    <div class="timeframe-selector">
+  <div class="kline-wrapper">
+    <div class="toolbar">
       <button
         v-for="tf in timeframes"
         :key="tf.value"
-        :class="['timeframe-btn', { active: active === tf.value }]"
+        :class="{ active: active === tf.value }"
         @click="changeTimeframe(tf.value)"
       >
         {{ tf.label }}
       </button>
+
+      <div class="price">
+        <span class="label">最新价</span>
+        <span class="value">
+          {{ latestPrice !== null ? latestPrice : '—' }}
+        </span>
+      </div>
     </div>
 
-    <!-- K线 -->
-    <div class="chart-container">
-      <div v-if="loading" class="loading-overlay">加载中...</div>
-      <div id="chart_box" class="chart"></div>
-    </div>
+    <div id="chart_box" class="chart"></div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { init } from 'klinecharts';
-import axios from 'axios';
-// import { useAuthStore } from '@/stores/auth'
+import { ethers } from 'ethers';
 
+/* ========= props ========= */
 const props = defineProps({
-  memeId: { type: String, default: '65f123456789abcdef000001' }
+    baseAddress: {
+    type: String,
+    required: true, // 直接当 base token address 用
+  },
 })
 
-// const authStore = useAuthStore()
-
-const API_BASE = (
-//   authStore.server_ip ||
-  'http://localhost:3000' ||
-  window.location.origin
-).replace(/\/$/, '') + '/api'
-// const API_BASE = '/api'
-
-const active = ref('5M')
-const loading = ref(false)
-let chart = null
-
-const applyChartData = (data) => {
-  if (!chart || !data?.length) return
-//   chart.applyNewData(data);
-  const formatted = data.map(item => ({
-    open: item.open,
-    high: item.high,
-    low: item.low,
-    close: item.close,
-    volume: item.volume,
-    timestamp: Math.floor(item.timestamp / 1000),
-  }))
-  console.log('data in applyChartData: ', data)
-
-  chart.applyNewData(formatted)
-//   if (typeof chart.applyNewData === 'function') {
-//     chart.applyNewData(data)
-//     return
-//   }
-//   if (typeof chart.setData === 'function') {
-//     chart.setData(data)
-//     return
-//   }
-//   if (typeof chart.updateData === 'function') {
-//     data.forEach(item => chart.updateData(item))
-//   }
-}
-
-let refreshTimer = null
-
-const startAutoRefresh = () => {
-  stopAutoRefresh()
-  refreshTimer = setInterval(async () => {
-    const data = await fetchKlines(active.value)
-    applyChartData(data)
-  }, 5000)
-}
-
-const stopAutoRefresh = () => {
-  if (refreshTimer) {
-    clearInterval(refreshTimer)
-    refreshTimer = null
-  }
-}
-
-const changeTimeframe = async (tf) => {
-  active.value = tf
-  stopAutoRefresh()
-
-  const data = await fetchKlines(tf)
-  applyChartData(data)
-
-  startAutoRefresh()
-}
-
-
+/* ========= timeframe ========= */
 const timeframeConfigs = {
-  '1M': { label: '1分', interval: '1m' },
-  '5M': { label: '5分', interval: '5m' },
-  '15M': { label: '15分', interval: '15m' },
-  '1H': { label: '1小时', interval: '1h' },
-  '1D': { label: '1天', interval: '1d' }
+  '5S': { label: '5秒', seconds: 5 },
+  '1M': { label: '1分', seconds: 60 },
+  '5M': { label: '5分', seconds: 300 },
+  '15M': { label: '15分', seconds: 900 },
+  '1H': { label: '1小时', seconds: 3600 },
 }
 
 const timeframes = Object.entries(timeframeConfigs).map(
   ([value, cfg]) => ({ value, label: cfg.label })
 )
 
-const fetchKlines = async (timeframe) => {
-  loading.value = true
-  try {
-    const { interval } = timeframeConfigs[timeframe]
-    console.log('in fetchKines: ,', `${API_BASE}/meme/${props.memeId}`)
-    const res = await axios.get(
-      `${API_BASE}/meme/${props.memeId}`,
-      { params: { interval } }
-    )
-    console.log('url is', `${API_BASE}/meme/${props.memeId}`)
-    console.log('res is', res)
+const active = ref('5M')
 
-    const mapped = res.data.data.map(k => ({
-      timestamp: Number(k.timestamp?.time),
-      open: Number(k.timestamp?.open),
-      high: Number(k.timestamp?.high),
-      low: Number(k.timestamp?.low),
-      close: Number(k.timestamp?.close),
-      volume: Number(k.timestamp?.volume || 0)
-    }))
+/* ========= chart ========= */
+let chart = null
 
-    console.log('[kline data]', {
-      memeId: props.memeId,
-      timeframe,
-      interval,
-      count: mapped.length,
-      data: mapped
-    })
+/* ========= DEX / Contract ========= */
+const DEX = '0x887D9Af1241a176107d31Bb3C69787DFff6dbaD8'
+const DEX_ABI = [
+  "function getLastPriceFor(address base) view returns (uint256)",
+]
 
-    return mapped
-  } finally {
-    loading.value = false
+let provider = null
+let dex = null
+
+const ensureDex = async () => {
+  if (dex) return
+  if (!window.ethereum) throw new Error('MetaMask not found')
+  provider = new ethers.BrowserProvider(window.ethereum)
+  dex = new ethers.Contract(DEX, DEX_ABI, provider)
+}
+
+/* ========= price state ========= */
+const latestPrice = ref(null)
+
+/* ========= K-line state ========= */
+const candles = ref([])
+const lastCandle = ref(null)
+const startTimestamp = ref(null)
+
+/* ========= fetch price ========= */
+const fetchLatestPrice = async () => {
+  await ensureDex()
+//   console.log('props: ', props.baseAddress)
+  const raw = await dex.getLastPriceFor(props.baseAddress)
+//   console.log('raw data is ',raw)
+  return Number(ethers.formatUnits(raw, 18))
+}
+
+/* ========= tick → candle ========= */
+const pushTickToCandle = (price, nowSec) => {
+  const interval = timeframeConfigs[active.value].seconds
+
+  if (!startTimestamp.value) {
+    startTimestamp.value = nowSec
+  }
+
+  const bucket =
+    Math.floor((nowSec - startTimestamp.value) / interval) * interval +
+    startTimestamp.value
+
+  if (!lastCandle.value || lastCandle.value.timestamp !== bucket) {
+    if (lastCandle.value) {
+      candles.value.push(lastCandle.value)
+    }
+
+    lastCandle.value = {
+      timestamp: bucket,
+      open: price,
+      high: price,
+      low: price,
+      close: price,
+      volume: 0,
+    }
+  } else {
+    lastCandle.value.high = Math.max(lastCandle.value.high, price)
+    lastCandle.value.low = Math.min(lastCandle.value.low, price)
+    lastCandle.value.close = price
   }
 }
 
+function normalizeData(list) {
+  return list.map(item => ({
+    timestamp: Number(item.timestamp),
+    open: Number(item.open),
+    high: Number(item.high),
+    low: Number(item.low),
+    close: Number(item.close),
+    volume: Number(item.volume ?? 0)
+  }))
+}
 
-onMounted(async () => {
-  chart = init('chart_box')
+/* ========= update chart ========= */
+const renderChart = () => {
+  if (!chart) return
+  const data = [...candles.value]
+  if (lastCandle.value) data.push(lastCandle.value)
+  const data_norm = normalizeData(data)
+//   console.log('data_norm is ', data_norm)
+  chart.applyNewData(data_norm)
+}
 
+/* ========= ticker ========= */
+let tickTimer = null
+
+const startTick = () => {
+  stopTick()
+  tickTimer = setInterval(async () => {
+    const price = await fetchLatestPrice()
+    const nowSec = Math.floor(Date.now() / 1000)
+
+    latestPrice.value = price
+    pushTickToCandle(price, nowSec)
+    renderChart()
+  }, 1000)
+}
+
+const stopTick = () => {
+  if (tickTimer) clearInterval(tickTimer)
+  tickTimer = null
+}
+
+/* ========= change timeframe ========= */
+const changeTimeframe = (tf) => {
+  active.value = tf
+  candles.value = []
+  lastCandle.value = null
+  startTimestamp.value = null
+}
+
+/* ========= lifecycle ========= */
+onMounted(() => {
+  // 初始化图表
+  chart = init("chart_box");
+
+  // 设置图表样式
   const styles = {
     grid: {
       show: true,
@@ -207,232 +231,53 @@ onMounted(async () => {
   };
 
   chart.setStyles(styles);
-  
-  if (chart?.createIndicator) {
-    chart.createIndicator('VOL')
-  }
 
-  const data = await fetchKlines(active.value)
-  applyChartData(data)
-
-  startAutoRefresh()
+  startTick()
 })
 
 onUnmounted(() => {
-  stopAutoRefresh()
-  if (chart) {
-    chart.dispose()
-    chart = null
-  }
+  stopTick()
+  chart?.dispose()
+  chart = null
 })
-
-
-watch(() => props.memeId, async () => {
-  stopAutoRefresh()
-  const data = await fetchKlines(active.value)
-  applyChartData(data)
-  startAutoRefresh()
-})
-
 </script>
 
-
-<style lang="scss" scoped>
-.trading-chart {
-  background: #1a1a1a;
+<style scoped>
+.kline-wrapper {
+  background: #0b0f14;
   border-radius: 12px;
-  padding: 20px;
-  border: 1px solid #333;
+  padding: 12px;
+  color: #fff;
+}
 
-  .price-header {
-    margin-bottom: 20px;
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
 
-    .price-info {
-      .current-price {
-        font-size: 28px;
-        font-weight: bold;
-        color: #fff;
-        margin-bottom: 12px;
+button {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
 
-        .price-change {
-          font-size: 16px;
-          margin-left: 12px;
-          font-weight: normal;
+button.active {
+  background: rgba(0, 208, 132, 0.25);
+  border-color: rgba(0, 208, 132, 0.5);
+}
 
-          &.positive {
-            color: #00d084;
-          }
+.price {
+  margin-left: auto;
+  font-weight: bold;
+}
 
-          &.negative {
-            color: #ff3b69;
-          }
-        }
-      }
-
-      .price-stats {
-        display: flex;
-        gap: 24px;
-
-        .stat-item {
-          display: flex;
-          flex-direction: column;
-
-          .label {
-            font-size: 12px;
-            color: #888;
-            margin-bottom: 4px;
-          }
-
-          .value {
-            font-size: 14px;
-            color: #fff;
-            font-weight: 500;
-          }
-        }
-      }
-    }
-  }
-
-  .timeframe-selector {
-    display: flex;
-    gap: 4px;
-    margin-bottom: 20px;
-    background: #0d0d0d;
-    padding: 4px;
-    border-radius: 8px;
-
-    .timeframe-btn {
-      padding: 8px 12px;
-      background: transparent;
-      border: none;
-      color: #888;
-      font-size: 12px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-
-      &:hover {
-        color: #fff;
-        background: rgba(255, 255, 255, 0.05);
-      }
-
-      &.active {
-        background: #65c281;
-        color: #000;
-        font-weight: 600;
-      }
-    }
-  }
-
-  .chart-container {
-    margin-bottom: 16px;
-    height: 550px; /* 固定高度，不再变化 */
-    width: 100%; /* 确保容器占满宽度 */
-    position: relative;
-
-    .chart {
-      width: 100%;
-      height: 100%;
-      background: #0d0d0d;
-      border-radius: 8px;
-      display: block; /* 确保块级显示 */
-      overflow: hidden; /* 防止溢出 */
-    }
-
-    .loading-overlay,
-    .error-overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(13, 13, 13, 0.9);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      border-radius: 8px;
-      z-index: 10;
-    }
-
-    .loading-spinner {
-      color: #65c281;
-      font-size: 16px;
-      font-weight: 500;
-    }
-
-    .error-message {
-      color: #ff3b69;
-      font-size: 14px;
-      margin-bottom: 12px;
-      text-align: center;
-    }
-
-    .retry-btn {
-      padding: 8px 16px;
-      background: #65c281;
-      color: #000;
-      border: none;
-      border-radius: 6px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background-color 0.2s ease;
-
-      &:hover {
-        background: #4fa865;
-      }
-    }
-  }
-
-  .indicator-selector {
-    margin-top: 16px;
-    padding: 12px;
-    background: #0d0d0d;
-    border-radius: 8px;
-    border: 1px solid #333;
-
-    .indicator-group {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 8px;
-
-      &:last-child {
-        margin-bottom: 0;
-      }
-
-      .indicator-label {
-        font-size: 12px;
-        color: #888;
-        font-weight: 600;
-        min-width: 60px;
-        text-align: left;
-      }
-
-      .indicator-btn {
-        padding: 6px 12px;
-        background: transparent;
-        border: 1px solid #333;
-        color: #888;
-        font-size: 11px;
-        border-radius: 4px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-
-        &:hover {
-          color: #fff;
-          border-color: #555;
-          background: rgba(255, 255, 255, 0.05);
-        }
-
-        &.active {
-          background: #65c281;
-          color: #000;
-          border-color: #65c281;
-          font-weight: 600;
-        }
-      }
-    }
-  }
-}</style>
+.chart {
+  width: 100%;
+  height: 420px;
+}
+</style>

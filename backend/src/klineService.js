@@ -1,5 +1,6 @@
 // klineService.js
 import { TickPrice } from './models.js'
+import { ethers } from 'ethers'
 
 /* ========== 时间周期定义 ========== */
 export const INTERVAL_MS = {
@@ -14,6 +15,8 @@ const INTERVALS = Object.keys(INTERVAL_MS)
 
 const currentKlineCache = new Map()
 const lastPriceCache = new Map()
+
+dex = new ethers.Contract(DEX, DEX_ABI, signer);
 
 /* ========== 工具函数 ========== */
 function alignTime(ts, interval, originTime) {
