@@ -16,6 +16,10 @@
           <span class="tp__k">Base</span>
           <span class="tp__v mono">{{ short(baseAddress) }}</span>
         </div>
+        <div class="tp__metaRow">
+          <span class="tp__k">Symbol</span>
+          <span class="tp__v mono">{{ baseSymbol || "—" }}</span>
+        </div>
       </div>
     </div>
 
@@ -59,7 +63,7 @@
     <div class="tp__card">
       <div class="tp__cardHead">
         <div class="tp__pair">
-          <span class="tp__pairBase">DOGE</span>
+          <span class="tp__pairBase">{{ baseSymbol || "BASE" }}</span>
           <span class="tp__pairSlash">/</span>
           <span class="tp__pairQuote">USDT</span>
         </div>
@@ -72,7 +76,7 @@
       <!-- Limit price row (only for limit) -->
       <div v-if="orderType === 'limit'" class="tp__row">
         <label class="tp__label">
-          价格 <span class="tp__hint">(DOGE 单位)</span>
+          价格 <span class="tp__hint">(USDT/{{ baseSymbol || "—" }})</span>
         </label>
         <div class="tp__inputWrap">
           <input
@@ -81,7 +85,7 @@
             type="text"
             placeholder="例如：0.123456"
           />
-          <div class="tp__unit">DOGE</div>
+          <div class="tp__unit">USDT</div>
         </div>
         <div class="tp__subhint">
           限价单：{{ side === "buy" ? "当市价 ≤ 你的价格时尝试成交" : "当市价 ≥ 你的价格时尝试成交" }}
@@ -98,12 +102,7 @@
         </label>
 
         <div class="tp__inputWrap">
-          <input
-            v-model="amount"
-            class="tp__input"
-            type="text"
-            placeholder="输入数量"
-          />
+          <input v-model="amount" class="tp__input" type="text" placeholder="输入数量" />
           <div class="tp__unit">{{ amountUnit }}</div>
         </div>
 
@@ -113,70 +112,198 @@
       </div>
 
       <!-- Action -->
-      <button class="tp__cta" :class="side" @click="noop">
-        {{ orderType === "limit" ? "提交限价单" : "提交市价单" }}
+      <button class="tp__cta" :class="side" @click="submitOrder" :disabled="disabled || txBusy">
+        {{ txBusy ? "提交中..." : (orderType === "limit" ? "提交限价单" : "提交市价单") }}
       </button>
 
       <div class="tp__fineprint">
-        * 此版本仅布局占位（hackathon UI），后续把链上/合约交互接到 script 即可。
+        <div class="mono" style="margin-bottom: 6px;">{{ dexStatus }}</div>
+        * 市价买：输入 USDT（maxQuoteIn）；市价卖：输入 {{ baseSymbol || "BASE" }}（amountBase）。<br />
+        * 限价买/卖：价格按 1e18 缩放；数量按 base decimals（默认 18）解析。
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed, ref, watch, onUnmounted } from "vue";
+import { ethers } from "ethers";
 
 /**
  * 组件入参：
  * - walletAddress: 用户钱包地址
- * - baseAddress: base 币地址（DOGE）
+ * - baseAddress: base 币地址（这里作为 DEX 接口参数 base）
+ * - baseSymbol: base 符号
  */
 const props = defineProps({
   walletAddress: { type: String, default: "" },
   baseAddress: { type: String, default: "" },
+  baseSymbol: { type: String, default: "" },
 });
 
-/* ====== layout placeholder state ====== */
+const { walletAddress, baseAddress, baseSymbol } = props;
+
+/* ====== DEX config ====== */
+const DEX = "0x887D9Af1241a176107d31Bb3C69787DFff6dbaD8";
+
+// base token address ✅ 来自父组件 props.baseAddress
+const DOGE = computed(() => String(baseAddress || ""));
+
+const DEX_ABI = [
+  "function marketBuyFor(address base, uint256 maxQuoteIn)",
+  "function marketSellFor(address base, uint256 amountBase)",
+  "function limitBuyFor(address base, uint256 price, uint256 amountBase) returns (uint256 orderId)",
+  "function limitSellFor(address base, uint256 price, uint256 amountBase) returns (uint256 orderId)",
+];
+
+/* ====== ui state ====== */
 const orderType = ref("market"); // 'market' | 'limit'
-const side = ref("buy");         // 'buy' | 'sell'
+const side = ref("buy"); // 'buy' | 'sell'
 
 const amount = ref("");
-const limitPrice = ref("");      // 仅限价使用
+const limitPrice = ref("");
 
+/* ====== web3 state ====== */
+const txBusy = ref(false);
+const dexStatus = ref("ready");
+
+const usdtDecimals = ref(18); // 如需精确，请接入 USDT.decimals()
+const dogeDecimals = ref(18); // 如需精确，请接入 base ERC20.decimals()
+
+let provider = null;
+let signer = null;
+let dex = null;
+
+const disabled = computed(() => !walletAddress || !baseAddress);
+
+/* ====== helpers ====== */
 function short(addr) {
   const a = String(addr || "");
   if (!a || a.length < 10) return a || "—";
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
 }
 
-// 你的特殊单位规则：
-// - 市价买入：USDT
-// - 市价卖出：DOGE
-// - 限价买/卖：价格和量都用 DOGE（按你的需求做 UI 文案）
+function toScaledPrice(p) {
+  return ethers.parseUnits(String(p), 18);
+}
+function toBaseAmount(v) {
+  return ethers.parseUnits(String(v), dogeDecimals.value);
+}
+function toQuoteAmount(v) {
+  return ethers.parseUnits(String(v), usdtDecimals.value);
+}
+
+async function ensureDex() {
+  if (dex) return;
+  if (!window.ethereum) throw new Error("MetaMask not found");
+
+  provider = new ethers.BrowserProvider(window.ethereum);
+  signer = await provider.getSigner();
+  dex = new ethers.Contract(DEX, DEX_ABI, signer);
+}
+
+/* ====== trading (按你给的 sendTx/limit/market 接法实现) ====== */
+async function sendTx(buildTx, label) {
+  if (disabled.value) return;
+
+  try {
+    txBusy.value = true;
+    dexStatus.value = `${label}: sending tx...`;
+    await ensureDex();
+
+    const tx = await buildTx();
+    await tx.wait();
+
+    dexStatus.value = `✅ ${label} confirmed.`;
+  } catch (e) {
+    dexStatus.value = `${label} error: ${e?.message || e}`;
+  } finally {
+    txBusy.value = false;
+  }
+}
+
+function limitBuy() {
+  return sendTx(
+    () => dex.limitBuyFor(DOGE.value, toScaledPrice(limitPrice.value), toBaseAmount(amount.value)),
+    "Limit Buy"
+  );
+}
+
+function limitSell() {
+  return sendTx(
+    () => dex.limitSellFor(DOGE.value, toScaledPrice(limitPrice.value), toBaseAmount(amount.value)),
+    "Limit Sell"
+  );
+}
+
+function marketBuy() {
+  console.log("amount.value: ", amount.value)
+  console.log("DOGE.value: ", DOGE.value)
+  return sendTx(
+    () => dex.marketBuyFor(DOGE.value, toQuoteAmount(amount.value)),
+    "Market Buy"
+  );
+}
+
+function marketSell() {
+  return sendTx(
+    () => dex.marketSellFor(DOGE.value, toBaseAmount(amount.value)),
+    "Market Sell"
+  );
+}
+
+function submitOrder() {
+  // 简单校验
+  if (!amount.value || Number(amount.value) <= 0) {
+    dexStatus.value = "请输入数量";
+    return;
+  }
+
+  if (orderType.value === "limit") {
+    if (!limitPrice.value || Number(limitPrice.value) <= 0) {
+      dexStatus.value = "请输入限价价格";
+      return;
+    }
+    return side.value === "buy" ? limitBuy() : limitSell();
+  }
+
+  return side.value === "buy" ? marketBuy() : marketSell();
+}
+
+/* ====== unit labels ====== */
 const amountUnit = computed(() => {
-  if (orderType.value === "market") return side.value === "buy" ? "USDT" : "DOGE";
-  return "DOGE";
+  if (orderType.value === "market") return side.value === "buy" ? "USDT" : (baseSymbol || "BASE");
+  return baseSymbol || "BASE";
 });
 
 const amountUnitLabel = computed(() => {
   if (orderType.value === "market") {
-    return side.value === "buy" ? "市价买入用 USDT 计量" : "市价卖出用 DOGE 计量";
+    return side.value === "buy" ? "市价买入用 USDT" : `市价卖出用 ${baseSymbol || "BASE"}`;
   }
-  return "限价单数量用 DOGE 计量";
+  return `限价单数量用 ${baseSymbol || "BASE"}`;
 });
 
 const amountHelp = computed(() => {
   if (orderType.value === "market") {
     return side.value === "buy"
-      ? "你输入要花多少 USDT（quote），系统按市价撮合。"
-      : "你输入要卖多少 DOGE（base），系统按市价撮合。";
+      ? "你输入最多花多少 USDT（maxQuoteIn），系统按市价撮合。"
+      : `你输入要卖多少 ${baseSymbol || "BASE"}（amountBase），系统按市价撮合。`;
   }
-  return "限价单：你输入 DOGE 数量；成交价格由你设置（DOGE 单位）。";
+  return `限价单：你输入 ${baseSymbol || "BASE"} 数量；价格输入 USDT/${baseSymbol || "BASE"}。`;
 });
 
-// 占位：按钮点击不做任何事，保证布局可用
-function noop() {}
+/* ====== reset dex instance when base changes (避免 base 切换时仍用旧状态) ====== */
+watch(
+  () => baseAddress,
+  () => {
+    // base 改变时不需要重建 provider/signer，但重新拉取/重新提交时会用 DOGE.value
+    // dex 合约地址固定，因此不清 dex
+  }
+);
+
+onUnmounted(() => {
+  // no listeners here
+});
 </script>
 
 <style lang="scss" scoped>
