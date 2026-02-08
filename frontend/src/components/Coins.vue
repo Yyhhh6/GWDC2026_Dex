@@ -16,7 +16,13 @@
 		</div>
 
 		<div class="grid">
-			<article v-for="coin in viewCoins" :key="coin.key" class="card">
+			<article
+				v-for="coin in viewCoins"
+				:key="coin.key"
+				class="card"
+				:class="{ clickable: !!coin.addressTrimmed }"
+				@click="onOpenToken(coin.addressTrimmed)"
+			>
 				<div class="cardTop">
 					<div class="symWrap">
 						<img class="icon" :src="coin.icon" :alt="coin.displaySymbol" />
@@ -73,7 +79,7 @@
 						class="btn"
 						type="button"
 						:disabled="!coin.addressTrimmed"
-						@click="copy(coin.key, coin.addressTrimmed)"
+						@click.stop="copy(coin.key, coin.addressTrimmed)"
 					>
 						{{ copiedKey === coin.key ? "已复制" : "复制地址" }}
 					</button>
@@ -83,7 +89,7 @@
 						:href="coin.addressTrimmed ? explorerAddressUrl(coin.addressTrimmed) : undefined"
 						target="_blank"
 						rel="noreferrer"
-						@click="onExplorerClick($event, coin.addressTrimmed)"
+						@click.stop="onExplorerClick($event, coin.addressTrimmed)"
 					>
 						查看区块浏览器
 					</a>
@@ -108,8 +114,11 @@ import { PHAROS_ATLANTIC, PHAROS_ATLANTIC_EXPLORER_BASE, PHAROS_ATLANTIC_RPC_URL
 import { callDex } from "../lib/dex";
 
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 
 const EXPLORER_BASE = PHAROS_ATLANTIC_EXPLORER_BASE;
+
+const router = useRouter();
 
 const coins = ref([]);
 
@@ -317,6 +326,12 @@ function onExplorerClick(event, address) {
 	if (!address) event.preventDefault();
 }
 
+function onOpenToken(address) {
+	const addr = String(address || "").trim();
+	if (!addr) return;
+	router.push({ name: "token", params: { address: addr } });
+}
+
 async function copy(key, text) {
 	if (!text) return;
 
@@ -453,6 +468,14 @@ onBeforeUnmount(() => {
 	border-radius: 12px;
 	background: white;
 	padding: 12px;
+}
+
+.card.clickable {
+	cursor: pointer;
+}
+
+.card.clickable:hover {
+	border-color: #999;
 }
 
 .cardTop {

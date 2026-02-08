@@ -1,30 +1,21 @@
 <template>
   <div class="page">
-    <div class="topbar">
+    <FrontierBar>
       <Wallet />
-    </div>
+    </FrontierBar>
 
-    <KlineChart />
-
-    <Coins />
+    <RouterView />
   </div>
 </template>
 
 <script setup>
-import KlineChart from "./components/KlineChart.vue";
 import Wallet from "./components/Wallet.vue";
-import Coins from "./components/Coins.vue";
+import FrontierBar from "./components/FrontierBar.vue";
+import { RouterView } from "vue-router";
 </script>
 
 <style scoped>
 .page {
-  padding: 16px;
-}
-
-.topbar {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  margin-bottom: 12px;
+  padding: 72px 16px 16px;
 }
 </style>
