@@ -1,13 +1,14 @@
 <template>
   <div class="page">
-    <!-- 返回 DarkHorse 悬浮按钮 -->
-    <button type="button" class="darkhorse-fab" @click="goToDarkHorse" aria-label="返回 DarkHorse">
-      <span class="darkhorse-fab__shine" aria-hidden="true"></span>
-      <span class="darkhorse-fab__text">DarkHorse Community</span>
-    </button>
-
     <FrontierBar>
-      <Wallet />
+      <div class="top-actions">
+        <Wallet />
+        <!-- 返回 DarkHorse 按钮 -->
+        <button type="button" class="darkhorse-fab" @click="goToDarkHorse" aria-label="返回 DarkHorse">
+          <span class="darkhorse-fab__shine" aria-hidden="true"></span>
+          <span class="darkhorse-fab__text">DarkHorse Community</span>
+        </button>
+      </div>
     </FrontierBar>
 
     <RouterView />
@@ -21,10 +22,14 @@ import { RouterView } from "vue-router";
 
 // 新增：返回 DarkHorse 链接（把这里换成你的指定网页）
 const DARKHORSE_URL = "http://localhost:3000/";
+const DARKHORSE_WINDOW_NAME = "darkhorse-app";
 
+if (typeof window !== "undefined") {
+  window.name = "darkhorse-dex";
+}
 function goToDarkHorse() {
-  // 新标签页打开，避免影响当前 SPA 状态；noopener 更安全
-  window.open(DARKHORSE_URL, "_blank", "noopener,noreferrer");
+  const darkhorseWindow = window.open(DARKHORSE_URL, DARKHORSE_WINDOW_NAME, "noopener,noreferrer");
+  if (darkhorseWindow) darkhorseWindow.focus();
 }
 </script>
 
@@ -36,12 +41,14 @@ function goToDarkHorse() {
   color: rgba(255, 255, 255, 0.9);
 }
 
+.top-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
 /* Web3 悬浮按钮：玻璃拟态 + 霓虹描边 + 丝滑交互 */
 .darkhorse-fab {
-  position: fixed;
-  top: 16px;
-  right: 16px;
-  z-index: 60;
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -115,8 +122,6 @@ function goToDarkHorse() {
 
 @media (max-width: 640px) {
   .darkhorse-fab {
-    top: 12px;
-    right: 12px;
     padding: 9px 11px;
   }
   .darkhorse-fab__text {
