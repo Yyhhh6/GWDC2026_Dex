@@ -306,12 +306,12 @@ onMounted(() => {
   startTick()
 })
 
-onUnmounted(() => {
-  stopTick()
-  chart?.dispose()
-  chart = null
-  hasRenderedData = false
-})
+// onUnmounted(() => {
+//   stopTick()
+//   chart?.dispose()
+//   chart = null
+//   hasRenderedData = false
+// })
 </script>
 
 <style scoped>
