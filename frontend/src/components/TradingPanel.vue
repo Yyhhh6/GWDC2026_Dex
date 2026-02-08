@@ -3,23 +3,8 @@
     <!-- Header -->
     <div class="tp__head">
       <div class="tp__title">
-        <div class="tp__badge">WEB3</div>
+        <div class="tp__badge">TRADE</div>
         <div class="tp__name">Trading Panel</div>
-      </div>
-
-      <div class="tp__meta">
-        <div class="tp__metaRow">
-          <span class="tp__k">Wallet</span>
-          <span class="tp__v mono">{{ short(walletAddress) }}</span>
-        </div>
-        <div class="tp__metaRow">
-          <span class="tp__k">Base</span>
-          <span class="tp__v mono">{{ short(baseAddress) }}</span>
-        </div>
-        <div class="tp__metaRow">
-          <span class="tp__k">Symbol</span>
-          <span class="tp__v mono">{{ baseSymbol || "—" }}</span>
-        </div>
       </div>
     </div>
 
@@ -65,7 +50,7 @@
         <div class="tp__pair">
           <span class="tp__pairBase">{{ baseSymbol || "BASE" }}</span>
           <span class="tp__pairSlash">/</span>
-          <span class="tp__pairQuote">USDT</span>
+          <span class="tp__pairQuote">{{ quoteSymbol || "QUOTE" }}</span>
         </div>
 
         <div class="tp__chip" :class="side === 'buy' ? 'buy' : 'sell'">
@@ -76,7 +61,7 @@
       <!-- Limit price row (only for limit) -->
       <div v-if="orderType === 'limit'" class="tp__row">
         <label class="tp__label">
-          价格 <span class="tp__hint">(USDT/{{ baseSymbol || "—" }})</span>
+          价格 <span class="tp__hint">({{ quoteSymbol || 'QUOTE' }} / {{ baseSymbol || 'BASE' }})</span>
         </label>
         <div class="tp__inputWrap">
           <input
@@ -85,7 +70,7 @@
             type="text"
             placeholder="例如：0.123456"
           />
-          <div class="tp__unit">USDT</div>
+          <div class="tp__unit">{{ quoteSymbol || "QUOTE" }}</div>
         </div>
         <div class="tp__subhint">
           限价单：{{ side === "buy" ? "当市价 ≤ 你的价格时尝试成交" : "当市价 ≥ 你的价格时尝试成交" }}
@@ -112,22 +97,21 @@
       </div>
 
       <!-- Action -->
-      <button class="tp__cta" :class="side" @click="submitOrder" :disabled="disabled || txBusy">
-        {{ txBusy ? "提交中..." : (orderType === "limit" ? "提交限价单" : "提交市价单") }}
+      <button class="tp__cta" :class="side" :disabled="busy" @click="submit">
+        {{ busy ? "处理中…" : orderType === "limit" ? "提交限价单" : "提交市价单" }}
       </button>
 
-      <div class="tp__fineprint">
-        <div class="mono" style="margin-bottom: 6px;">{{ dexStatus }}</div>
-        * 市价买：输入 USDT（maxQuoteIn）；市价卖：输入 {{ baseSymbol || "BASE" }}（amountBase）。<br />
-        * 限价买/卖：价格按 1e18 缩放；数量按 base decimals（默认 18）解析。
-      </div>
+      <div v-if="error" class="tp__fineprint tp__fineprint--error">{{ error }}</div>
+      <div v-else-if="status" class="tp__fineprint">{{ status }}</div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, ref, watch, onUnmounted } from "vue";
-import { ethers } from "ethers";
+import { computed, ref, toRefs } from "vue";
+import { isAddress, parseUnits } from "ethers";
+
+import { sendDex } from "../lib/dex";
 
 /**
  * 组件入参：
@@ -139,171 +123,101 @@ const props = defineProps({
   walletAddress: { type: String, default: "" },
   baseAddress: { type: String, default: "" },
   baseSymbol: { type: String, default: "" },
+  quoteSymbol: { type: String, default: "" },
+  baseDecimals: { type: Number, default: 18 },
+  quoteDecimals: { type: Number, default: 18 },
 });
 
-const { walletAddress, baseAddress, baseSymbol } = props;
+const { walletAddress, baseAddress, baseSymbol, quoteSymbol, baseDecimals, quoteDecimals } = toRefs(props);
 
-/* ====== DEX config ====== */
-const DEX = "0x887D9Af1241a176107d31Bb3C69787DFff6dbaD8";
-
-// base token address ✅ 来自父组件 props.baseAddress
-const DOGE = computed(() => String(baseAddress || ""));
-
-const DEX_ABI = [
-  "function marketBuyFor(address base, uint256 maxQuoteIn)",
-  "function marketSellFor(address base, uint256 amountBase)",
-  "function limitBuyFor(address base, uint256 price, uint256 amountBase) returns (uint256 orderId)",
-  "function limitSellFor(address base, uint256 price, uint256 amountBase) returns (uint256 orderId)",
-];
-
-/* ====== ui state ====== */
+/* ====== layout placeholder state ====== */
 const orderType = ref("market"); // 'market' | 'limit'
 const side = ref("buy"); // 'buy' | 'sell'
 
 const amount = ref("");
-const limitPrice = ref("");
+const limitPrice = ref("");      // 仅限价使用
 
-/* ====== web3 state ====== */
-const txBusy = ref(false);
-const dexStatus = ref("ready");
+const busy = ref(false);
+const error = ref("");
+const status = ref("");
 
-const usdtDecimals = ref(18); // 如需精确，请接入 USDT.decimals()
-const dogeDecimals = ref(18); // 如需精确，请接入 base ERC20.decimals()
-
-let provider = null;
-let signer = null;
-let dex = null;
-
-const disabled = computed(() => !walletAddress || !baseAddress);
-
-/* ====== helpers ====== */
 function short(addr) {
   const a = String(addr || "");
   if (!a || a.length < 10) return a || "—";
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
 }
 
-function toScaledPrice(p) {
-  return ethers.parseUnits(String(p), 18);
-}
-function toBaseAmount(v) {
-  return ethers.parseUnits(String(v), dogeDecimals.value);
-}
-function toQuoteAmount(v) {
-  return ethers.parseUnits(String(v), usdtDecimals.value);
-}
-
-async function ensureDex() {
-  if (dex) return;
-  if (!window.ethereum) throw new Error("MetaMask not found");
-
-  provider = new ethers.BrowserProvider(window.ethereum);
-  signer = await provider.getSigner();
-  dex = new ethers.Contract(DEX, DEX_ABI, signer);
-}
-
-/* ====== trading (按你给的 sendTx/limit/market 接法实现) ====== */
-async function sendTx(buildTx, label) {
-  if (disabled.value) return;
-
-  try {
-    txBusy.value = true;
-    dexStatus.value = `${label}: sending tx...`;
-    await ensureDex();
-
-    const tx = await buildTx();
-    await tx.wait();
-
-    dexStatus.value = `✅ ${label} confirmed.`;
-  } catch (e) {
-    dexStatus.value = `${label} error: ${e?.message || e}`;
-  } finally {
-    txBusy.value = false;
-  }
-}
-
-function limitBuy() {
-  return sendTx(
-    () => dex.limitBuyFor(DOGE.value, toScaledPrice(limitPrice.value), toBaseAmount(amount.value)),
-    "Limit Buy"
-  );
-}
-
-function limitSell() {
-  return sendTx(
-    () => dex.limitSellFor(DOGE.value, toScaledPrice(limitPrice.value), toBaseAmount(amount.value)),
-    "Limit Sell"
-  );
-}
-
-function marketBuy() {
-  console.log("amount.value: ", amount.value)
-  console.log("DOGE.value: ", DOGE.value)
-  return sendTx(
-    () => dex.marketBuyFor(DOGE.value, toQuoteAmount(amount.value)),
-    "Market Buy"
-  );
-}
-
-function marketSell() {
-  return sendTx(
-    () => dex.marketSellFor(DOGE.value, toBaseAmount(amount.value)),
-    "Market Sell"
-  );
-}
-
-function submitOrder() {
-  // 简单校验
-  if (!amount.value || Number(amount.value) <= 0) {
-    dexStatus.value = "请输入数量";
-    return;
-  }
-
-  if (orderType.value === "limit") {
-    if (!limitPrice.value || Number(limitPrice.value) <= 0) {
-      dexStatus.value = "请输入限价价格";
-      return;
-    }
-    return side.value === "buy" ? limitBuy() : limitSell();
-  }
-
-  return side.value === "buy" ? marketBuy() : marketSell();
-}
-
-/* ====== unit labels ====== */
+// 你的特殊单位规则：
+// - 市价买入：Quote
+// - 市价卖出：Base
+// - 限价买/卖：价格用 Quote，数量用 Base
 const amountUnit = computed(() => {
-  if (orderType.value === "market") return side.value === "buy" ? "USDT" : (baseSymbol || "BASE");
-  return baseSymbol || "BASE";
+  if (orderType.value === "market") return side.value === "buy" ? (quoteSymbol.value || "QUOTE") : (baseSymbol.value || "BASE");
+  return baseSymbol.value || "BASE";
 });
 
 const amountUnitLabel = computed(() => {
   if (orderType.value === "market") {
-    return side.value === "buy" ? "市价买入用 USDT" : `市价卖出用 ${baseSymbol || "BASE"}`;
+    return side.value === "buy"
+		? `市价买入用 ${quoteSymbol.value || "QUOTE"} 计量`
+		: `市价卖出用 ${baseSymbol.value || "BASE"} 计量`;
   }
-  return `限价单数量用 ${baseSymbol || "BASE"}`;
+  return "限价单数量用 Base 计量";
 });
 
 const amountHelp = computed(() => {
   if (orderType.value === "market") {
     return side.value === "buy"
-      ? "你输入最多花多少 USDT（maxQuoteIn），系统按市价撮合。"
-      : `你输入要卖多少 ${baseSymbol || "BASE"}（amountBase），系统按市价撮合。`;
+      ? `你输入要花多少 ${quoteSymbol.value || "QUOTE"}（quote），系统按市价撮合。`
+      : `你输入要卖多少 ${baseSymbol.value || "BASE"}（base），系统按市价撮合。`;
   }
-  return `限价单：你输入 ${baseSymbol || "BASE"} 数量；价格输入 USDT/${baseSymbol || "BASE"}。`;
+  return `限价单：你输入 ${baseSymbol.value || "BASE"} 数量；成交价格用 ${quoteSymbol.value || "QUOTE"} 表示。`;
 });
 
-/* ====== reset dex instance when base changes (避免 base 切换时仍用旧状态) ====== */
-watch(
-  () => baseAddress,
-  () => {
-    // base 改变时不需要重建 provider/signer，但重新拉取/重新提交时会用 DOGE.value
-    // dex 合约地址固定，因此不清 dex
-  }
-);
+function parseAmountOrThrow(input, decimals, label) {
+  const s = String(input || "").trim();
+  if (!s) throw new Error(`请输入${label}`);
+  const v = parseUnits(s, decimals ?? 18);
+  if (v <= 0n) throw new Error(`${label}必须大于 0`);
+  return v;
+}
 
-onUnmounted(() => {
-  // no listeners here
-});
+async function submit() {
+  error.value = "";
+  status.value = "";
+  busy.value = true;
+  try {
+    const base = String(baseAddress.value || "").trim();
+    if (!isAddress(base)) throw new Error("base 地址无效");
+
+    let tx;
+    if (orderType.value === "market") {
+      if (side.value === "buy") {
+        const maxQuoteIn = parseAmountOrThrow(amount.value, quoteDecimals.value, `数量(${quoteSymbol.value || "QUOTE"})`);
+        status.value = "正在发送市价买入…";
+        tx = await sendDex("marketBuyFor", base, maxQuoteIn);
+      } else {
+        const amountBase = parseAmountOrThrow(amount.value, baseDecimals.value, `数量(${baseSymbol.value || "BASE"})`);
+        status.value = "正在发送市价卖出…";
+        tx = await sendDex("marketSellFor", base, amountBase);
+      }
+    } else {
+      const price = parseAmountOrThrow(limitPrice.value, quoteDecimals.value, `价格(${quoteSymbol.value || "QUOTE"})`);
+      const amountBase = parseAmountOrThrow(amount.value, baseDecimals.value, `数量(${baseSymbol.value || "BASE"})`);
+      const method = side.value === "buy" ? "limitBuyFor" : "limitSellFor";
+      status.value = `正在发送${side.value === "buy" ? "限价买入" : "限价卖出"}…`;
+      tx = await sendDex(method, base, price, amountBase);
+    }
+
+    status.value = `已发送：${tx.hash}`;
+    await tx.wait();
+    status.value = "交易完成";
+  } catch (e) {
+    error.value = e?.shortMessage || e?.message || String(e);
+  } finally {
+    busy.value = false;
+  }
+}
 </script>
 
 <style lang="scss" scoped>
@@ -327,7 +241,10 @@ onUnmounted(() => {
   border-radius: 14px;
   padding: 16px;
   color: var(--text);
-  max-width: 520px;
+  width: 100%;
+  max-width: none;
+	min-width: 0;
+	overflow: hidden;
 }
 
 .mono {
@@ -340,6 +257,7 @@ onUnmounted(() => {
   justify-content: space-between;
   gap: 14px;
   margin-bottom: 14px;
+	flex-wrap: wrap;
 }
 
 .tp__title {
@@ -362,33 +280,6 @@ onUnmounted(() => {
 .tp__name {
   font-size: 16px;
   font-weight: 800;
-}
-
-.tp__meta {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 220px;
-}
-
-.tp__metaRow {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  background: var(--panel2);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  padding: 8px 10px;
-}
-
-.tp__k {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.tp__v {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.88);
 }
 
 .tp__tabs {
@@ -516,15 +407,15 @@ onUnmounted(() => {
 }
 
 .tp__inputWrap {
-  position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto;
   align-items: center;
+  gap: 10px;
 }
 
 .tp__input {
   width: 100%;
   padding: 12px 12px;
-  padding-right: 64px;
   border-radius: 12px;
   background: rgba(0, 0, 0, 0.35);
   border: 1px solid rgba(255, 255, 255, 0.10);
@@ -539,15 +430,15 @@ onUnmounted(() => {
 }
 
 .tp__unit {
-  position: absolute;
-  right: 10px;
   font-size: 12px;
-  font-weight: 800;
-  color: rgba(255, 255, 255, 0.55);
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.70);
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.10);
+  white-space: nowrap;
 }
 
 .tp__subhint {
@@ -586,9 +477,20 @@ onUnmounted(() => {
   border-color: rgba(255, 255, 255, 0.18);
 }
 
+.tp__cta:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .tp__fineprint {
   margin-top: 10px;
   font-size: 11px;
   color: rgba(255, 255, 255, 0.42);
+}
+
+.tp__fineprint--error {
+	color: rgba(255, 110, 110, 0.9);
+	word-break: break-word;
 }
 </style>

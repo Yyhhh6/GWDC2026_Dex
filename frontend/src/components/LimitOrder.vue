@@ -3,46 +3,26 @@
       <!-- Header -->
       <div class="lo__head">
         <div class="lo__title">
-          <span class="lo__badge">MY</span>
-          <span class="lo__name">我的挂单</span>
+          <span class="lo__badge">ORDER</span>
+          <span class="lo__name">My Orders</span>
         </div>
-  
-        <div class="lo__meta">
-          <div class="row">
-            <span class="k">Wallet</span>
-            <span class="v mono">{{ short(walletAddress) }}</span>
-          </div>
-          <div class="row">
-            <span class="k">Base</span>
-            <span class="v mono">{{ short(baseAddress) }}</span>
-          </div>
-          <div class="row">
-            <span class="k">Symbol</span>
-            <span class="v mono">{{ baseSymbol || "—" }}</span>
-          </div>
-        </div>
-      </div>
-  
-      <!-- Actions -->
-      <div class="lo__actions">
-        <button class="btn btn--primary" @click="refreshMyOrders" :disabled="disabled || txBusy">
-          <span class="dot" aria-hidden="true"></span>
-          刷新挂单
-        </button>
-        <div class="hint mono">{{ statusText }}</div>
+		<button class="btn btn--primary lo__refresh" @click="refresh" :disabled="disabled">
+			<span class="dot" aria-hidden="true"></span>
+			Refresh
+		</button>
       </div>
   
       <!-- List -->
       <div class="lo__list">
-        <div v-if="sortedOrders.length === 0" class="empty">
-          暂无挂单
-        </div>
+        <div v-if="loading" class="empty">Loading…</div>
+        <div v-else-if="error" class="empty">{{ error }}</div>
+        <div v-else-if="sortedOrders.length === 0" class="empty">No open orders</div>
   
         <div v-for="o in sortedOrders" :key="String(o.id)" class="card">
           <!-- top line -->
           <div class="card__top">
-            <div class="side" :class="o.sideLabel === 'BUY' ? 'buy' : 'sell'">
-              {{ o.sideLabel === "BUY" ? "买入" : "卖出" }}
+            <div class="side" :class="o.side === 'BUY' ? 'buy' : 'sell'">
+              {{ o.side === "BUY" ? "Buy" : "Sell" }}
             </div>
   
             <div class="time mono">
@@ -53,21 +33,18 @@
           <!-- main fields -->
           <div class="grid">
             <div class="item">
-              <div class="label">成交价 (USDT/{{ baseSymbol || "—" }})</div>
-              <div class="value mono">{{ o.priceDisplay }}</div>
-              <div class="sub">price (scaled 1e18)</div>
+              <div class="label">Price</div>
+              <div class="value mono">{{ fmtPrice(o.price) }}</div>
             </div>
   
             <div class="item">
-              <div class="label">期望成交量 ({{ baseSymbol || "—" }})</div>
-              <div class="value mono">{{ o.amountDisplay }}</div>
-              <div class="sub">remaining: {{ o.remainingDisplay }}</div>
+              <div class="label">Amount</div>
+              <div class="value mono">{{ fmtBase(o.amountBase) }}</div>
             </div>
   
             <div class="item">
-              <div class="label">已成交量 ({{ baseSymbol || "—" }})</div>
-              <div class="value mono">{{ o.filledDisplay }}</div>
-              <div class="sub">active: {{ o.active ? "yes" : "no" }}</div>
+              <div class="label">Filled</div>
+              <div class="value mono">{{ fmtBase(o.filledBase) }}</div>
             </div>
           </div>
   
@@ -97,52 +74,90 @@
   </template>
   
   <script setup>
-  import { computed, ref, watch, onUnmounted } from "vue";
-  import { ethers } from "ethers";
+  import { computed, onMounted, ref, toRefs, watch } from "vue";
+  import { formatUnits, isAddress } from "ethers";
+
+  import { callDex } from "../lib/dex";
   
   const props = defineProps({
     walletAddress: { type: String, default: "" },
     baseAddress: { type: String, default: "" },
     baseSymbol: { type: String, default: "" },
+    quoteSymbol: { type: String, default: "" },
+    baseDecimals: { type: Number, default: 18 },
+    quoteDecimals: { type: Number, default: 18 },
   });
+
+  const { walletAddress, baseAddress, baseSymbol, quoteSymbol, baseDecimals, quoteDecimals } = toRefs(props);
   
-  const { walletAddress, baseAddress, baseSymbol } = props;
+  const loading = ref(false);
+  const error = ref("");
+  const orders = ref([]);
   
-  /* ====== DEX config ====== */
-  const DEX = "0x887D9Af1241a176107d31Bb3C69787DFff6dbaD8";
-  
-  // 这里按你的要求：baseAddress 赋值到 DOGE（即 base token address）
-  const DOGE = computed(() => String(baseAddress || ""));
-  
-  const DEX_ABI = [
-    "function cancelOrder(uint256 orderId)",
-    "function getMyOpenOrdersFor(address base) view returns (tuple(uint256 id, address baseToken, uint8 side, uint256 price, uint256 amountBase, uint256 filledBase, uint256 remainingBase, uint256 timestamp, bool active)[])",
-  ];
-  
-  /* ====== state ====== */
-  const statusText = ref("ready");
-  const txBusy = ref(false);
-  
-  const dogeDecimals = ref(18); // 默认 18；如果你的 base 不是 18，需要再接 ERC20.decimals()
-  
-  const myOrders = ref([]); // from chain
-  
-  const disabled = computed(() => !walletAddress || !baseAddress);
+  const disabled = computed(() => !walletAddress.value || !baseAddress.value);
   
   const sortedOrders = computed(() => {
-    return [...myOrders.value].sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
+    return [...orders.value]
+    .filter(o => o?.active !== false)
+    .sort((a, b) => Number(b.timestamp || 0) - Number(a.timestamp || 0));
   });
   
-  let provider = null;
-  let signer = null;
-  let dex = null;
-  let pollTimer = null;
+  async function refresh() {
+  if (disabled.value) return;
+  error.value = "";
+  loading.value = true;
+  try {
+    const base = String(baseAddress.value || "").trim();
+    const from = String(walletAddress.value || "").trim();
+    if (!isAddress(base) || !isAddress(from)) {
+      orders.value = [];
+      return;
+    }
+    const res = await callDex("getMyOpenOrdersFor", base, { from });
+    orders.value = (res || []).map(o => {
+      const sideNum = Number(o?.side ?? 0);
+      return {
+        id: String(o?.id ?? ""),
+        side: sideNum === 0 ? "BUY" : "SELL",
+        price: BigInt(o?.price ?? 0),
+        amountBase: BigInt(o?.amountBase ?? 0),
+        filledBase: BigInt(o?.filledBase ?? 0),
+        remainingBase: BigInt(o?.remainingBase ?? 0),
+        timestamp: Number(o?.timestamp ?? 0),
+        active: Boolean(o?.active),
+      };
+    });
+  } catch (e) {
+    error.value = e?.shortMessage || e?.message || "读取挂单失败";
+    orders.value = [];
+  } finally {
+    loading.value = false;
+  }
+  }
   
-  /* ====== helpers ====== */
   function short(addr) {
     const a = String(addr || "");
     if (!a || a.length < 10) return a || "—";
     return `${a.slice(0, 6)}…${a.slice(-4)}`;
+  }
+  
+  function fmtUnitsSafe(v, d) {
+	try {
+		const s = formatUnits(v ?? 0n, d ?? 18);
+		if (!s.includes(".")) return s;
+		const [a, b] = s.split(".");
+		return `${a}.${(b || "").slice(0, 6)}`.replace(/\.$/, "");
+	} catch {
+		return "0";
+	}
+  }
+
+  function fmtPrice(v) {
+	return fmtUnitsSafe(v ?? 0n, quoteDecimals.value);
+  }
+
+  function fmtBase(v) {
+	return fmtUnitsSafe(v ?? 0n, baseDecimals.value);
   }
   
   function fmtTime(ts) {
@@ -159,134 +174,23 @@
   }
   
   function fillPct(o) {
-    // 用 BigInt 更稳（避免浮点误差）
-    const a = BigInt(o.amountBase || 0);
-    const f = BigInt(o.filledBase || 0);
+    const a = BigInt(o.amountBase || 0n);
+    const f = BigInt(o.filledBase || 0n);
     if (a === 0n) return 0;
     const pct = Number((f * 10000n) / a) / 100; // 2位小数
     return Math.max(0, Math.min(100, pct));
   }
-  
-  async function ensureDex() {
-    if (dex) return;
-    if (!window.ethereum) throw new Error("MetaMask not found");
-  
-    provider = new ethers.BrowserProvider(window.ethereum);
-    signer = await provider.getSigner();
-    dex = new ethers.Contract(DEX, DEX_ABI, signer);
-  }
-  
-  /* ====== refresh: get my orders from contract ====== */
-  async function refreshMyOrders() {
-    if (disabled.value) {
-      myOrders.value = [];
-      return;
-    }
-  
-    try {
-      statusText.value = "loading...";
-      await ensureDex();
-  
-      const base = DOGE.value;
-      if (!base) {
-        myOrders.value = [];
-        statusText.value = "missing baseAddress";
-        return;
-      }
-  
-      const raw = await dex.getMyOpenOrdersFor(base); // OrderView[]
-  
-      myOrders.value = raw.map((o) => {
-        const sideNum = Number(o.side); // BUY=0, SELL=1
-  
-        return {
-          id: o.id,
-          baseToken: o.baseToken,
-          side: o.side,
-          price: o.price,
-          amountBase: o.amountBase,
-          filledBase: o.filledBase,
-          remainingBase: o.remainingBase,
-          timestamp: o.timestamp,
-          active: o.active,
-  
-          sideLabel: sideNum === 0 ? "BUY" : "SELL",
-          priceDisplay: ethers.formatUnits(o.price, 18),
-          amountDisplay: ethers.formatUnits(o.amountBase, dogeDecimals.value),
-          filledDisplay: ethers.formatUnits(o.filledBase, dogeDecimals.value),
-          remainingDisplay: ethers.formatUnits(o.remainingBase, dogeDecimals.value),
-        };
-      });
-  
-      statusText.value = `loaded: ${myOrders.value.length}`;
-    } catch (e) {
-      console.error(e);
-      myOrders.value = [];
-      statusText.value = `error: ${e?.message || e}`;
-    }
-  }
-  
-  /* ====== tx helpers (cancel) ====== */
-  async function sendTx(buildTx, label) {
-    if (disabled.value) return;
-  
-    try {
-      txBusy.value = true;
-      statusText.value = `${label}: sending...`;
-      await ensureDex();
-  
-      const tx = await buildTx();
-      await tx.wait();
-  
-      statusText.value = `✅ ${label} confirmed`;
-      await refreshMyOrders();
-    } catch (e) {
-      console.error(e);
-      statusText.value = `${label} error: ${e?.message || e}`;
-    } finally {
-      txBusy.value = false;
-    }
-  }
-  
-  // ✅ one-click cancel from list
-  function cancelOrderById(orderId) {
-    return sendTx(() => dex.cancelOrder(orderId), `Cancel Order #${String(orderId)}`);
-  }
-  
-  /* ====== polling ====== */
-  function startPolling() {
-    stopPolling();
-    pollTimer = setInterval(async () => {
-      if (txBusy.value) return;
-      await refreshMyOrders();
-    }, 3000);
-  }
-  
-  function stopPolling() {
-    if (pollTimer) clearInterval(pollTimer);
-    pollTimer = null;
-  }
-  
-  watch(
-    () => [walletAddress, baseAddress],
-    async ([w, b]) => {
-      stopPolling();
-      myOrders.value = [];
-  
-      if (!w || !b) {
-        statusText.value = "not ready";
-        return;
-      }
-  
-      await refreshMyOrders();
-      startPolling();
-    },
-    { immediate: true }
-  );
-  
-  onUnmounted(() => {
-    stopPolling();
+
+  onMounted(async () => {
+	await refresh();
   });
+
+  watch(
+	() => [walletAddress.value, baseAddress.value],
+	async () => {
+		await refresh();
+	}
+  );
   </script>
   
   <style lang="scss" scoped>
@@ -307,7 +211,9 @@
     border-radius: 14px;
     padding: 14px;
     color: var(--text);
-    max-width: 680px;
+	width: 100%;
+	max-width: none;
+	min-width: 0;
   }
   
   .mono {
@@ -317,9 +223,15 @@
   .lo__head {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     gap: 12px;
     margin-bottom: 12px;
   }
+
+	.lo__refresh {
+		flex: 0 0 auto;
+		white-space: nowrap;
+	}
   
   .lo__title {
     display: flex;
@@ -340,46 +252,6 @@
   .lo__name {
     font-size: 15px;
     font-weight: 900;
-  }
-  
-  .lo__meta {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    min-width: 240px;
-  
-    .row {
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 10px;
-      padding: 8px 10px;
-  
-      .k {
-        font-size: 12px;
-        color: var(--muted);
-        font-weight: 800;
-      }
-      .v {
-        font-size: 12px;
-        color: rgba(255, 255, 255, 0.88);
-      }
-    }
-  }
-  
-  .lo__actions {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 12px;
-  
-    .hint {
-      font-size: 12px;
-      color: rgba(255, 255, 255, 0.55);
-    }
   }
   
   .btn {

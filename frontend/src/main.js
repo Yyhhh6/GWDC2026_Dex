@@ -1,4 +1,8 @@
-import { createApp } from 'vue'
-import App from './App.vue'
+import { createApp } from "vue";
+import App from "./App.vue";
+import DexPlugin from "./plugins/dex";
+import router from "./router";
 
-createApp(App).mount('#app')
+import "./global.css";
+
+createApp(App).use(DexPlugin).use(router).mount("#app");
