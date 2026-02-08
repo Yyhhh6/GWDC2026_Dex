@@ -21,9 +21,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
-import { init } from 'klinecharts'
-import axios from 'axios'
+import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { init } from 'klinecharts';
+import axios from 'axios';
 // import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps({
@@ -45,17 +45,29 @@ let chart = null
 
 const applyChartData = (data) => {
   if (!chart || !data?.length) return
-  if (typeof chart.applyNewData === 'function') {
-    chart.applyNewData(data)
-    return
-  }
-  if (typeof chart.setData === 'function') {
-    chart.setData(data)
-    return
-  }
-  if (typeof chart.updateData === 'function') {
-    data.forEach(item => chart.updateData(item))
-  }
+//   chart.applyNewData(data);
+  const formatted = data.map(item => ({
+    open: item.open,
+    high: item.high,
+    low: item.low,
+    close: item.close,
+    volume: item.volume,
+    timestamp: Math.floor(item.timestamp / 1000),
+  }))
+  console.log('data in applyChartData: ', data)
+
+  chart.applyNewData(formatted)
+//   if (typeof chart.applyNewData === 'function') {
+//     chart.applyNewData(data)
+//     return
+//   }
+//   if (typeof chart.setData === 'function') {
+//     chart.setData(data)
+//     return
+//   }
+//   if (typeof chart.updateData === 'function') {
+//     data.forEach(item => chart.updateData(item))
+//   }
 }
 
 let refreshTimer = null

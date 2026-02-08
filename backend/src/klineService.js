@@ -25,7 +25,10 @@ function alignTime(ts, interval, originTime) {
 /* ========== 拉最新价格（示例） ========== */
 async function fetchLatestPrice(memeId) {
   // TODO: 替换为真实行情接口
-  return Number((Math.random() * 0.01 + 0.1).toFixed(6))
+  lastPriceRaw.value = await dex.getLastPriceFor(DOGE);
+  const lastPriceDisplay = computed(() => ethers.formatUnits(lastPriceRaw.value || 0n, 18));
+
+  return Number((Math.random() * 0.01 + 0.1).toFixed(6));
 }
 
 /* ========== 内存 K 线缓存 ========== */
