@@ -16,6 +16,6 @@ import { RouterView } from "vue-router";
 
 <style scoped>
 .page {
-  padding: 72px 16px 16px;
+	padding: 72px 16px 16px;
 }
 </style>
