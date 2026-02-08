@@ -4,7 +4,7 @@
 
     <div class="row">
       <button class="btn" :disabled="loading" @click="onCall">
-        {{ loading ? "调用中..." : "callDex(getOrderBookDepthFor)" }}
+        {{ loading ? "Calling..." : "callDex(getOrderBookDepthFor)" }}
       </button>
       <span v-if="error" class="error">{{ error }}</span>
     </div>
@@ -12,7 +12,7 @@
     <pre v-if="result" class="result">{{ result }}</pre>
 
     <div class="hint">
-      需要把 ABI 填到 <code>src/abi/dex.abi.json</code>，否则会报 ABI 为空。
+      Please put the ABI into <code>src/abi/dex.abi.json</code>; otherwise the ABI will be empty.
     </div>
   </div>
 </template>
@@ -32,13 +32,13 @@ async function onCall() {
   result.value = "";
 
   if (!dex) {
-    error.value = "dex 未注入：请确认 main.js 已 use(DexPlugin)";
+    error.value = "DEX not injected: make sure main.js calls use(DexPlugin)";
     return;
   }
 
   loading.value = true;
   try {
-    // 注意：参数签名要以你的 ABI 为准。这里先演示调用入口。
+    // Note: the parameter signature must match your ABI. This only demonstrates the call entry.
     const res = await dex.callDex("getOrderBookDepthFor");
     result.value = typeof res === "string" ? res : JSON.stringify(res, null, 2);
   } catch (e) {

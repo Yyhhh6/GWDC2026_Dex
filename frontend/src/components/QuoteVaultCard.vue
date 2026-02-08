@@ -9,7 +9,7 @@
 			<div class="row">
 				<div class="label">Quote</div>
 				<div class="value">
-					<span v-if="metaLoading">读取中…</span>
+					<span v-if="metaLoading">Loading…</span>
 					<span v-else>{{ quoteName || "-" }}</span>
 					<span class="sep">·</span>
 					<span class="mono">{{ quoteSymbol || "-" }}</span>
@@ -17,49 +17,49 @@
 			</div>
 
 			<div class="row">
-				<div class="label">合约地址</div>
+				<div class="label">Contract Address</div>
 				<div class="value mono" :title="quoteTokenAddress">{{ formatAddr(quoteTokenAddress) }}</div>
 			</div>
 
 			<div class="row">
-				<div class="label">钱包余额</div>
+				<div class="label">Wallet Balance</div>
 				<div class="value mono">
-					<span v-if="!walletAddress">未连接</span>
-					<span v-else-if="balancesLoading">读取中…</span>
+					<span v-if="!walletAddress">Not connected</span>
+					<span v-else-if="balancesLoading">Loading…</span>
 					<span v-else>{{ walletBalanceDisplay }}</span>
 				</div>
 			</div>
 
 			<div class="row">
-				<div class="label">DEX 已充值</div>
+				<div class="label">DEX Deposited</div>
 				<div class="value mono">
-					<span v-if="!walletAddress">未连接</span>
-					<span v-else-if="balancesLoading">读取中…</span>
+					<span v-if="!walletAddress">Not connected</span>
+					<span v-else-if="balancesLoading">Loading…</span>
 					<span v-else>{{ dexBalanceDisplay }}</span>
 				</div>
 			</div>
 
 			<div class="row">
-				<div class="label">授权额度</div>
+				<div class="label">Allowance</div>
 				<div class="value mono">
 					<span v-if="!walletAddress">-</span>
-					<span v-else-if="balancesLoading">读取中…</span>
+					<span v-else-if="balancesLoading">Loading…</span>
 					<span v-else>{{ allowanceDisplay }}</span>
 				</div>
 			</div>
 
 			<div class="form">
-				<label class="inputLabel">数量</label>
+				<label class="inputLabel">Amount</label>
 				<input v-model="amount" class="input" type="text" inputmode="decimal" placeholder="0.0" />
-				<div class="formHint">单位：{{ quoteSymbol || "quote" }}</div>
+				<div class="formHint">Unit: {{ quoteSymbol || "quote" }}</div>
 			</div>
 
 			<div class="actions">
 				<button class="btn" type="button" :disabled="busy" @click="onDeposit">
-					{{ busy ? "处理中…" : "充值 Quote" }}
+					{{ busy ? "Processing…" : "Deposit Quote" }}
 				</button>
 				<button class="btn" type="button" :disabled="busy" @click="onWithdraw">
-					{{ busy ? "处理中…" : "提取 Quote" }}
+					{{ busy ? "Processing…" : "Withdraw Quote" }}
 				</button>
 			</div>
 
@@ -164,7 +164,7 @@ async function loadQuoteMeta() {
 			quoteSymbol.value = String(s || "");
 		}
 	} catch (e) {
-		error.value = e?.shortMessage || e?.message || "读取 quote 信息失败";
+		error.value = e?.shortMessage || e?.message || "Failed to load quote info";
 	} finally {
 		metaLoading.value = false;
 	}
@@ -187,7 +187,7 @@ async function refreshBalances() {
 		dexBalance.value = BigInt(db);
 		allowance.value = BigInt(alw);
 	} catch (e) {
-		error.value = e?.shortMessage || e?.message || "读取 quote 余额失败";
+		error.value = e?.shortMessage || e?.message || "Failed to load quote balance";
 	} finally {
 		balancesLoading.value = false;
 	}
@@ -195,20 +195,20 @@ async function refreshBalances() {
 
 function parseAmountOrThrow() {
 	const s = String(amount.value || "").trim();
-	if (!s) throw new Error("请输入数量");
+	if (!s) throw new Error("Enter an amount");
 	const v = parseUnits(s, quoteDecimals.value ?? 18);
-	if (v <= 0n) throw new Error("数量必须大于 0");
+	if (v <= 0n) throw new Error("Amount must be greater than 0");
 	return v;
 }
 
 async function getWriteQuoteTokenContract() {
 	const eth = getEthereum();
-	if (!eth?.request) throw new Error("未检测到钱包扩展（window.ethereum）");
+	if (!eth?.request) throw new Error("Wallet extension not detected (window.ethereum).");
 	await ensurePharosChain();
 	await eth.request({ method: "eth_requestAccounts" });
 
 	const qt = String(quoteTokenAddress.value || "").trim();
-	if (!isAddress(qt)) throw new Error("quoteToken 无效");
+	if (!isAddress(qt)) throw new Error("Invalid quoteToken");
 
 	const provider = new BrowserProvider(eth, "any");
 	const signer = await provider.getSigner();
@@ -219,12 +219,12 @@ async function ensureAllowance(required) {
 	await refreshBalances();
 	if (allowance.value >= required) return;
 
-	status.value = "正在授权 quote…";
+	status.value = "Approving quote...";
 	const token = await getWriteQuoteTokenContract();
 	const tx = await token.approve(DEX_ADDRESS, required);
-	status.value = `授权已发送：${tx.hash}`;
+	status.value = `Approval sent: ${tx.hash}`;
 	await tx.wait();
-	status.value = "授权完成";
+	status.value = "Approval complete";
 	await refreshBalances();
 }
 
@@ -235,11 +235,11 @@ async function onDeposit() {
 	try {
 		const v = parseAmountOrThrow();
 		await ensureAllowance(v);
-		status.value = "正在充值 quote…";
+		status.value = "Depositing quote...";
 		const tx = await sendDex("depositQuote", v);
-		status.value = `充值已发送：${tx.hash}`;
+		status.value = `Deposit sent: ${tx.hash}`;
 		await tx.wait();
-		status.value = "充值完成";
+		status.value = "Deposit complete";
 		await refreshBalances();
 	} catch (e) {
 		error.value = e?.shortMessage || e?.message || String(e);
@@ -254,11 +254,11 @@ async function onWithdraw() {
 	busy.value = true;
 	try {
 		const v = parseAmountOrThrow();
-		status.value = "正在提取 quote…";
+		status.value = "Withdrawing quote...";
 		const tx = await sendDex("withdrawQuote", v);
-		status.value = `提取已发送：${tx.hash}`;
+		status.value = `Withdraw sent: ${tx.hash}`;
 		await tx.wait();
-		status.value = "提取完成";
+		status.value = "Withdraw complete";
 		await refreshBalances();
 	} catch (e) {
 		error.value = e?.shortMessage || e?.message || String(e);

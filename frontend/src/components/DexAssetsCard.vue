@@ -10,40 +10,40 @@
 		<div class="card">
 
 			<div class="row">
-				<div class="label">Quote（钱包）</div>
+				<div class="label">Quote (Wallet)</div>
 				<div class="value mono">
 					<span v-if="!walletAddress">-</span>
-					<span v-else-if="loading">读取中…</span>
+					<span v-else-if="loading">Loading…</span>
 					<span v-else>{{ quoteWalletDisplay }}</span>
 				</div>
 			</div>
 
 			<div class="row">
-				<div class="label">Quote（DEX）</div>
+				<div class="label">Quote (DEX)</div>
 				<div class="value mono">
 					<span v-if="!walletAddress">-</span>
-					<span v-else-if="loading">读取中…</span>
+					<span v-else-if="loading">Loading…</span>
 					<span v-else>{{ quoteDexDisplay }}</span>
 				</div>
 			</div>
 
 			<div class="row">
-				<div class="label">Quote（总额）</div>
+				<div class="label">Quote (Total)</div>
 				<div class="value mono">
 					<span v-if="!walletAddress">-</span>
-					<span v-else-if="loading">读取中…</span>
+					<span v-else-if="loading">Loading…</span>
 					<span v-else>{{ quoteTotalDisplay }}</span>
 				</div>
 			</div>
 
 			<div v-if="error" class="row">
-				<div class="label">状态</div>
+				<div class="label">Status</div>
 				<div class="value warn">{{ error }}</div>
 			</div>
 
 			<div v-if="walletAddress" class="list">
-				<div v-if="loading" class="empty">正在加载资产…</div>
-				<div v-else-if="!baseAssets.length" class="empty">没有 base 资产（余额为 0 的不显示）</div>
+				<div v-if="loading" class="empty">Loading assets…</div>
+				<div v-else-if="!baseAssets.length" class="empty">No base assets (zero balances hidden)</div>
 				<div v-else>
 					<div v-for="a in baseAssets" :key="a.address" class="assetRow">
 						<div class="left">
@@ -54,9 +54,9 @@
 							</div>
 						</div>
 						<div class="right">
-							<div class="mono">钱包：{{ a.walletDisplay }}</div>
-							<div class="mono">DEX：{{ a.dexDisplay }}</div>
-							<div class="mono">总额：{{ a.totalDisplay }}</div>
+							<div class="mono">Wallet: {{ a.walletDisplay }}</div>
+							<div class="mono">DEX: {{ a.dexDisplay }}</div>
+							<div class="mono">Total: {{ a.totalDisplay }}</div>
 						</div>
 					</div>
 				</div>
@@ -279,7 +279,7 @@ async function loadAll() {
 		await loadQuote(trader);
 		await loadBases(trader);
 	} catch (e) {
-		error.value = e?.shortMessage || e?.message || "读取资产失败";
+		error.value = e?.shortMessage || e?.message || "Failed to load assets";
 	} finally {
 		loading.value = false;
 	}

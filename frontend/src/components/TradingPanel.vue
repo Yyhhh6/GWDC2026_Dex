@@ -15,14 +15,14 @@
         :class="{ active: orderType === 'market' }"
         @click="orderType = 'market'"
       >
-        市价
+        Market
       </button>
       <button
         class="tp__tab"
         :class="{ active: orderType === 'limit' }"
         @click="orderType = 'limit'"
       >
-        限价
+        Limit
       </button>
     </div>
 
@@ -33,14 +33,14 @@
         :class="{ active: side === 'buy' }"
         @click="side = 'buy'"
       >
-        买入
+        Buy
       </button>
       <button
         class="tp__tab tp__tab--sell"
         :class="{ active: side === 'sell' }"
         @click="side = 'sell'"
       >
-        卖出
+        Sell
       </button>
     </div>
 
@@ -61,33 +61,33 @@
       <!-- Limit price row (only for limit) -->
       <div v-if="orderType === 'limit'" class="tp__row">
         <label class="tp__label">
-          价格 <span class="tp__hint">({{ quoteSymbol || 'QUOTE' }} / {{ baseSymbol || 'BASE' }})</span>
+          Price <span class="tp__hint">({{ quoteSymbol || 'QUOTE' }} / {{ baseSymbol || 'BASE' }})</span>
         </label>
         <div class="tp__inputWrap">
           <input
             v-model="limitPrice"
             class="tp__input"
             type="text"
-            placeholder="例如：0.123456"
+            placeholder="e.g. 0.123456"
           />
           <div class="tp__unit">{{ quoteSymbol || "QUOTE" }}</div>
         </div>
         <div class="tp__subhint">
-          限价单：{{ side === "buy" ? "当市价 ≤ 你的价格时尝试成交" : "当市价 ≥ 你的价格时尝试成交" }}
+          Limit order: {{ side === "buy" ? "tries to fill when market price ≤ your price" : "tries to fill when market price ≥ your price" }}
         </div>
       </div>
 
       <!-- Amount row -->
       <div class="tp__row">
         <label class="tp__label">
-          数量
+          Amount
           <span class="tp__hint">
             ({{ amountUnitLabel }})
           </span>
         </label>
 
         <div class="tp__inputWrap">
-          <input v-model="amount" class="tp__input" type="text" placeholder="输入数量" />
+          <input v-model="amount" class="tp__input" type="text" placeholder="Enter amount" />
           <div class="tp__unit">{{ amountUnit }}</div>
         </div>
 
@@ -98,7 +98,7 @@
 
       <!-- Action -->
       <button class="tp__cta" :class="side" :disabled="busy" @click="submit">
-        {{ busy ? "处理中…" : orderType === "limit" ? "提交限价单" : "提交市价单" }}
+        {{ busy ? "Processing…" : orderType === "limit" ? "Submit Limit Order" : "Submit Market Order" }}
       </button>
 
       <div v-if="error" class="tp__fineprint tp__fineprint--error">{{ error }}</div>
@@ -159,26 +159,26 @@ const amountUnit = computed(() => {
 const amountUnitLabel = computed(() => {
   if (orderType.value === "market") {
     return side.value === "buy"
-		? `市价买入用 ${quoteSymbol.value || "QUOTE"} 计量`
-		: `市价卖出用 ${baseSymbol.value || "BASE"} 计量`;
+		? `Market buy is quoted in ${quoteSymbol.value || "QUOTE"}`
+		: `Market sell is quoted in ${baseSymbol.value || "BASE"}`;
   }
-  return "限价单数量用 Base 计量";
+  return "Limit orders use Base for amount";
 });
 
 const amountHelp = computed(() => {
   if (orderType.value === "market") {
     return side.value === "buy"
-      ? `你输入要花多少 ${quoteSymbol.value || "QUOTE"}（quote），系统按市价撮合。`
-      : `你输入要卖多少 ${baseSymbol.value || "BASE"}（base），系统按市价撮合。`;
+      ? `Enter how much ${quoteSymbol.value || "QUOTE"} (quote) to spend. The system matches at market price.`
+      : `Enter how much ${baseSymbol.value || "BASE"} (base) to sell. The system matches at market price.`;
   }
-  return `限价单：你输入 ${baseSymbol.value || "BASE"} 数量；成交价格用 ${quoteSymbol.value || "QUOTE"} 表示。`;
+  return `Limit orders: amount in ${baseSymbol.value || "BASE"}; price in ${quoteSymbol.value || "QUOTE"}.`;
 });
 
 function parseAmountOrThrow(input, decimals, label) {
   const s = String(input || "").trim();
-  if (!s) throw new Error(`请输入${label}`);
+  if (!s) throw new Error(`Enter ${label}`);
   const v = parseUnits(s, decimals ?? 18);
-  if (v <= 0n) throw new Error(`${label}必须大于 0`);
+  if (v <= 0n) throw new Error(`${label} must be greater than 0`);
   return v;
 }
 
@@ -188,30 +188,30 @@ async function submit() {
   busy.value = true;
   try {
     const base = String(baseAddress.value || "").trim();
-    if (!isAddress(base)) throw new Error("base 地址无效");
+  if (!isAddress(base)) throw new Error("Invalid base address");
 
     let tx;
     if (orderType.value === "market") {
       if (side.value === "buy") {
-        const maxQuoteIn = parseAmountOrThrow(amount.value, quoteDecimals.value, `数量(${quoteSymbol.value || "QUOTE"})`);
-        status.value = "正在发送市价买入…";
+    const maxQuoteIn = parseAmountOrThrow(amount.value, quoteDecimals.value, `Amount (${quoteSymbol.value || "QUOTE"})`);
+		status.value = "Sending market buy...";
         tx = await sendDex("marketBuyFor", base, maxQuoteIn);
       } else {
-        const amountBase = parseAmountOrThrow(amount.value, baseDecimals.value, `数量(${baseSymbol.value || "BASE"})`);
-        status.value = "正在发送市价卖出…";
+    const amountBase = parseAmountOrThrow(amount.value, baseDecimals.value, `Amount (${baseSymbol.value || "BASE"})`);
+		status.value = "Sending market sell...";
         tx = await sendDex("marketSellFor", base, amountBase);
       }
     } else {
-      const price = parseAmountOrThrow(limitPrice.value, quoteDecimals.value, `价格(${quoteSymbol.value || "QUOTE"})`);
-      const amountBase = parseAmountOrThrow(amount.value, baseDecimals.value, `数量(${baseSymbol.value || "BASE"})`);
+    const price = parseAmountOrThrow(limitPrice.value, quoteDecimals.value, `Price (${quoteSymbol.value || "QUOTE"})`);
+    const amountBase = parseAmountOrThrow(amount.value, baseDecimals.value, `Amount (${baseSymbol.value || "BASE"})`);
       const method = side.value === "buy" ? "limitBuyFor" : "limitSellFor";
-      status.value = `正在发送${side.value === "buy" ? "限价买入" : "限价卖出"}…`;
+	status.value = `Sending ${side.value === "buy" ? "limit buy" : "limit sell"}...`;
       tx = await sendDex(method, base, price, amountBase);
     }
 
-    status.value = `已发送：${tx.hash}`;
+	status.value = `Sent: ${tx.hash}`;
     await tx.wait();
-    status.value = "交易完成";
+	status.value = "Trade complete";
   } catch (e) {
     error.value = e?.shortMessage || e?.message || String(e);
   } finally {

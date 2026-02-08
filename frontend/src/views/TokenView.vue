@@ -1,7 +1,7 @@
 <template>
 	<section class="tokenView">
 		<div class="head">
-			<button class="back" type="button" @click="goBack">返回</button>
+			<button class="back" type="button" @click="goBack">Back</button>
 			<div class="info">
 				<div class="title">{{ baseSymbol || "Token" }} / {{ quoteSymbol || "Quote" }}</div>
 				<div class="addr mono" :title="address">{{ address }}</div>
@@ -256,6 +256,12 @@ onBeforeUnmount(() => {
 	padding: 12px;
 	overflow: hidden;
 	min-width: 0;
+	min-height: 560px;
+	display: flex;
+}
+
+.klinePanel :deep(.kline-wrapper) {
+	flex: 1 1 auto;
 }
 
 .bottomGrid {
