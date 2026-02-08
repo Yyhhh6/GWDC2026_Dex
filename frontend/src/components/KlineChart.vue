@@ -81,6 +81,41 @@ const lastCandle = ref(null)
 const startTimestamp = ref(null)
 const priceHistory = ref([])
 
+/* ========= demo data ========= */
+const buildDemoTicks = () => {
+  let T = 1000
+  const start = Date.now() - T * 15 // 1 hour ago
+  const ticks = [
+    {timestamp: start, price: 0.},
+    {timestamp: start + T , price: 0.93},
+    {timestamp: start + T * 2, price: 0.87},
+    {timestamp: start + T * 3, price: 0.46},
+    {timestamp: start + T * 4, price: 0.22},
+    {timestamp: start + T * 5, price: 0.22},
+    {timestamp: start + T * 6, price: 0.22},
+    {timestamp: start + T * 7, price: 0.22},
+    {timestamp: start + T * 8, price: 0.22},
+    {timestamp: start + T * 9, price: 0.22},
+    {timestamp: start + T * 10, price: 0.22},
+    {timestamp: start + T * 11, price: 0.90},
+    {timestamp: start + T * 12, price: 0.20},
+    {timestamp: start + T * 13, price: 0.22},
+    {timestamp: start + T * 14, price: 0.57},
+    {timestamp: start + T * 15, price: 0.9},
+  ]
+
+//   console.log('demo ticks: ', ticks)
+  return ticks
+}
+
+const seedDemoData = () => {
+  const demoTicks = buildDemoTicks()
+  priceHistory.value = demoTicks
+  latestPrice.value = demoTicks[demoTicks.length - 1].price
+  rebuildCandlesFromHistory()
+  renderFullChart()
+}
+
 /* ========= fetch price ========= */
 const fetchLatestPrice = async () => {
   await ensureDex()
@@ -180,6 +215,7 @@ const startTick = () => {
   tickTimer = setInterval(async () => {
     const price = await fetchLatestPrice()
     const nowMs = Date.now()
+    // console.log('fetched price: ', price, ' at ', new Date(nowMs).toLocaleTimeString())
 
     latestPrice.value = price
     priceHistory.value.push({ timestamp: nowMs, price })
@@ -265,6 +301,7 @@ onMounted(() => {
 
   chart.setStyles(styles);
 
+  seedDemoData()
   startTick()
 })
 

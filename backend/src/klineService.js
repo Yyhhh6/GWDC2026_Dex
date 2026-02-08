@@ -16,7 +16,47 @@ const INTERVALS = Object.keys(INTERVAL_MS)
 const currentKlineCache = new Map()
 const lastPriceCache = new Map()
 
-dex = new ethers.Contract(DEX, DEX_ABI, signer);
+const DEX = '0x887D9Af1241a176107d31Bb3C69787DFff6dbaD8'
+
+const DEX_ABI = [
+  'function getLatestPrice(address base) view returns (uint256)'
+]
+
+const latestPrice = ref(null)       // number (已 format)
+const priceLoading = ref(false)
+
+let provider = null
+let dex = null
+
+const ensureDex = async () => {
+  if (dex) return
+  if (!window.ethereum) throw new Error('MetaMask not found')
+
+  provider = new ethers.BrowserProvider(window.ethereum)
+  dex = new ethers.Contract(DEX, DEX_ABI, provider)
+}
+
+const fetchLatestPriceFromChain = async () => {
+  if (!props.memeId) return
+
+  try {
+    priceLoading.value = true
+    await ensureDex()
+
+    // 假设 memeId == base token address
+    const rawPrice = await dex.getLatestPrice(props.memeId)
+
+    latestPrice.value = Number(
+      ethers.formatUnits(rawPrice, 18)
+    )
+  } catch (e) {
+    console.error('[fetchLatestPriceFromChain]', e)
+    latestPrice.value = null
+  } finally {
+    priceLoading.value = false
+  }
+}
+
 
 /* ========== 工具函数 ========== */
 function alignTime(ts, interval, originTime) {
