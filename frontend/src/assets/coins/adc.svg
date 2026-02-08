@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+	<circle cx="16" cy="16" r="16" fill="#2563EB" />
+	<text
+		x="16"
+		y="16"
+		fill="#FFFFFF"
+		font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial"
+		font-size="10.5"
+		font-weight="800"
+		text-anchor="middle"
+		dominant-baseline="central"
+		letter-spacing="0.6"
+	>
+		ADC
+	</text>
+</svg>

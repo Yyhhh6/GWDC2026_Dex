@@ -71,10 +71,16 @@ import { Contract, JsonRpcProvider, formatUnits, isAddress } from "ethers";
 
 import bnbIcon from "../assets/coins/bnb.svg";
 import btcIcon from "../assets/coins/btc.svg";
+import cfxIcon from "../assets/coins/cfx.svg";
 import dogeIcon from "../assets/coins/doge.svg";
+import emoIcon from "../assets/coins/emo.svg";
 import ethIcon from "../assets/coins/eth.svg";
 import solIcon from "../assets/coins/sol.svg";
+import trxIcon from "../assets/coins/trx.svg";
+import adcIcon from "../assets/coins/adc.svg";
 import genericIcon from "../assets/coins/generic.svg";
+
+import dhcIcon from "../assets/brand/dhc.jpg";
 
 import { PHAROS_ATLANTIC, PHAROS_ATLANTIC_RPC_URL } from "../lib/pharos";
 import { callDex } from "../lib/dex";
@@ -128,6 +134,11 @@ function pickIcon(symbol, name) {
 	const n = String(name || "").toUpperCase();
 	const text = `${s} ${n}`;
 
+	if (text.includes("DHC")) return dhcIcon;
+	if (text.includes("TRX") || text.includes("TRON")) return trxIcon;
+	if (text.includes("CFX") || text.includes("CONFLUX")) return cfxIcon;
+	if (text.includes("EMO") || text.includes("EMOTION")) return emoIcon;
+	if (text.includes("ADC") || text.includes("ACADEMY")) return adcIcon;
 	if (text.includes("BTC")) return btcIcon;
 	if (text.includes("ETH")) return ethIcon;
 	if (text.includes("DOGE")) return dogeIcon;
