@@ -52,6 +52,7 @@ const active = ref('5M')
 
 /* ========= chart ========= */
 let chart = null
+let hasRenderedData = false
 
 /* ========= DEX / Contract ========= */
 const DEX = '0x887D9Af1241a176107d31Bb3C69787DFff6dbaD8'
@@ -152,13 +153,23 @@ function normalizeData(list) {
 }
 
 /* ========= update chart ========= */
-const renderChart = () => {
+const renderFullChart = () => {
   if (!chart) return
   const data = [...candles.value]
   if (lastCandle.value) data.push(lastCandle.value)
   const data_norm = normalizeData(data)
-//   console.log('data_norm is ', data_norm)
   chart.applyNewData(data_norm)
+  hasRenderedData = true
+}
+
+const renderLatestCandle = () => {
+  if (!chart || !lastCandle.value) return
+  if (!hasRenderedData) {
+    renderFullChart()
+    return
+  }
+  const [latest] = normalizeData([lastCandle.value])
+  chart.updateData(latest)
 }
 
 /* ========= ticker ========= */
@@ -173,7 +184,7 @@ const startTick = () => {
     latestPrice.value = price
     priceHistory.value.push({ timestamp: nowMs, price })
     pushTickToCandle(price, nowMs)
-    renderChart()
+    renderLatestCandle()
   }, 1000)
 }
 
@@ -186,7 +197,7 @@ const stopTick = () => {
 const changeTimeframe = (tf) => {
   active.value = tf
   rebuildCandlesFromHistory()
-  renderChart()
+  renderFullChart()
 }
 
 /* ========= lifecycle ========= */
@@ -261,6 +272,7 @@ onUnmounted(() => {
   stopTick()
   chart?.dispose()
   chart = null
+  hasRenderedData = false
 })
 </script>
 
