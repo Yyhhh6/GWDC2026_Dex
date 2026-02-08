@@ -1,5 +1,8 @@
 <template>
 	<div class="home">
+		<div class="brandHero">
+			<BrandMark :size="148" subtitle="Community-driven DEX" :nameSize="26" :subSize="14" />
+		</div>
 		<div class="viewSwitch">
 			<span class="label">View</span>
 			<div class="seg">
@@ -30,6 +33,7 @@
 import { ref } from "vue";
 import Coins from "../components/Coins.vue";
 import MarketList from "../components/MarketList.vue";
+import BrandMark from "../components/BrandMark.vue";
 
 const viewMode = ref("grid");
 </script>
@@ -39,6 +43,12 @@ const viewMode = ref("grid");
 	max-width: 1280px;
 	width: 100%;
 	margin: 0 auto;
+}
+
+.brandHero {
+	display: flex;
+	justify-content: center;
+	margin: 34px 0 22px;
 }
 
 .viewSwitch {

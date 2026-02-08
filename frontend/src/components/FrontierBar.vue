@@ -2,7 +2,7 @@
 	<header class="frontierbar">
 		<div class="inner">
 			<div class="left">
-				<div class="brand">FrontierBar</div>
+				<BrandMark :size="40" :compact="false" subtitle="" :nameSize="20" badge />
 			</div>
 			<div class="right">
 				<slot />
@@ -12,6 +12,7 @@
 </template>
 
 <script setup>
+import BrandMark from "./BrandMark.vue";
 </script>
 
 <style scoped>
@@ -20,7 +21,7 @@
 	top: 0;
 	left: 0;
 	right: 0;
-	height: 56px;
+	height: 72px;
 	z-index: 50;
 	background: radial-gradient(900px 520px at 15% 0%, rgba(0, 208, 132, 0.10), transparent 55%),
 		radial-gradient(820px 520px at 95% 5%, rgba(86, 195, 255, 0.08), transparent 60%),
@@ -37,9 +38,17 @@
 	padding: 0 16px;
 }
 
-.brand {
-	font-size: 14px;
-	font-weight: 700;
-	color: rgba(255, 255, 255, 0.92);
+.left {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+}
+
+.right {
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
 }
 </style>

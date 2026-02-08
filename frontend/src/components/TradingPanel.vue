@@ -4,7 +4,7 @@
     <div class="tp__head">
       <div class="tp__title">
         <div class="tp__badge">TRADE</div>
-        <div class="tp__name">Trading Panel</div>
+        <div class="tp__name">Trade</div>
       </div>
     </div>
 
@@ -61,19 +61,19 @@
       <!-- Limit price row (only for limit) -->
       <div v-if="orderType === 'limit'" class="tp__row">
         <label class="tp__label">
-          Price <span class="tp__hint">({{ quoteSymbol || 'QUOTE' }} / {{ baseSymbol || 'BASE' }})</span>
+          Price <span class="tp__hint">({{ quoteSymbol || 'QUOTE' }} per {{ baseSymbol || 'BASE' }})</span>
         </label>
         <div class="tp__inputWrap">
           <input
             v-model="limitPrice"
             class="tp__input"
             type="text"
-            placeholder="e.g. 0.123456"
+            placeholder="0.0"
           />
           <div class="tp__unit">{{ quoteSymbol || "QUOTE" }}</div>
         </div>
         <div class="tp__subhint">
-          Limit order: {{ side === "buy" ? "tries to fill when market price ≤ your price" : "tries to fill when market price ≥ your price" }}
+          {{ side === "buy" ? "Fills when market price ≤ your limit" : "Fills when market price ≥ your limit" }}
         </div>
       </div>
 
@@ -87,7 +87,7 @@
         </label>
 
         <div class="tp__inputWrap">
-          <input v-model="amount" class="tp__input" type="text" placeholder="Enter amount" />
+          <input v-model="amount" class="tp__input" type="text" placeholder="0.0" />
           <div class="tp__unit">{{ amountUnit }}</div>
         </div>
 
@@ -98,7 +98,7 @@
 
       <!-- Action -->
       <button class="tp__cta" :class="side" :disabled="busy" @click="submit">
-        {{ busy ? "Processing…" : orderType === "limit" ? "Submit Limit Order" : "Submit Market Order" }}
+        {{ busy ? "Submitting…" : ctaText }}
       </button>
 
       <div v-if="error" class="tp__fineprint tp__fineprint--error">{{ error }}</div>
@@ -159,24 +159,30 @@ const amountUnit = computed(() => {
 const amountUnitLabel = computed(() => {
   if (orderType.value === "market") {
     return side.value === "buy"
-		? `Market buy is quoted in ${quoteSymbol.value || "QUOTE"}`
-		: `Market sell is quoted in ${baseSymbol.value || "BASE"}`;
+		? `Spend (${quoteSymbol.value || "QUOTE"})`
+		: `Sell (${baseSymbol.value || "BASE"})`;
   }
-  return "Limit orders use Base for amount";
+  return `Amount (${baseSymbol.value || "BASE"})`;
 });
 
 const amountHelp = computed(() => {
   if (orderType.value === "market") {
     return side.value === "buy"
-      ? `Enter how much ${quoteSymbol.value || "QUOTE"} (quote) to spend. The system matches at market price.`
-      : `Enter how much ${baseSymbol.value || "BASE"} (base) to sell. The system matches at market price.`;
+      ? `Enter how much ${quoteSymbol.value || "QUOTE"} you want to spend.`
+      : `Enter how much ${baseSymbol.value || "BASE"} you want to sell.`;
   }
-  return `Limit orders: amount in ${baseSymbol.value || "BASE"}; price in ${quoteSymbol.value || "QUOTE"}.`;
+  return `Set price in ${quoteSymbol.value || "QUOTE"} and amount in ${baseSymbol.value || "BASE"}.`;
+});
+
+const ctaText = computed(() => {
+	const buySell = side.value === "buy" ? "Buy" : "Sell";
+	if (orderType.value === "limit") return `Place Limit ${buySell}`;
+	return `Place Market ${buySell}`;
 });
 
 function parseAmountOrThrow(input, decimals, label) {
   const s = String(input || "").trim();
-  if (!s) throw new Error(`Enter ${label}`);
+  if (!s) throw new Error(`${label} is required`);
   const v = parseUnits(s, decimals ?? 18);
   if (v <= 0n) throw new Error(`${label} must be greater than 0`);
   return v;
@@ -188,30 +194,30 @@ async function submit() {
   busy.value = true;
   try {
     const base = String(baseAddress.value || "").trim();
-  if (!isAddress(base)) throw new Error("Invalid base address");
+	if (!isAddress(base)) throw new Error("Invalid token address");
 
     let tx;
     if (orderType.value === "market") {
       if (side.value === "buy") {
-    const maxQuoteIn = parseAmountOrThrow(amount.value, quoteDecimals.value, `Amount (${quoteSymbol.value || "QUOTE"})`);
-		status.value = "Sending market buy...";
+    const maxQuoteIn = parseAmountOrThrow(amount.value, quoteDecimals.value, "Amount");
+    status.value = "Submitting market buy…";
         tx = await sendDex("marketBuyFor", base, maxQuoteIn);
       } else {
-    const amountBase = parseAmountOrThrow(amount.value, baseDecimals.value, `Amount (${baseSymbol.value || "BASE"})`);
-		status.value = "Sending market sell...";
+    const amountBase = parseAmountOrThrow(amount.value, baseDecimals.value, "Amount");
+    status.value = "Submitting market sell…";
         tx = await sendDex("marketSellFor", base, amountBase);
       }
     } else {
-    const price = parseAmountOrThrow(limitPrice.value, quoteDecimals.value, `Price (${quoteSymbol.value || "QUOTE"})`);
-    const amountBase = parseAmountOrThrow(amount.value, baseDecimals.value, `Amount (${baseSymbol.value || "BASE"})`);
+    const price = parseAmountOrThrow(limitPrice.value, quoteDecimals.value, "Price");
+    const amountBase = parseAmountOrThrow(amount.value, baseDecimals.value, "Amount");
       const method = side.value === "buy" ? "limitBuyFor" : "limitSellFor";
-	status.value = `Sending ${side.value === "buy" ? "limit buy" : "limit sell"}...`;
+    status.value = `Submitting ${side.value === "buy" ? "limit buy" : "limit sell"}…`;
       tx = await sendDex(method, base, price, amountBase);
     }
 
-	status.value = `Sent: ${tx.hash}`;
+  status.value = `Tx sent: ${tx.hash}`;
     await tx.wait();
-	status.value = "Trade complete";
+  status.value = "Confirmed";
   } catch (e) {
     error.value = e?.shortMessage || e?.message || String(e);
   } finally {
