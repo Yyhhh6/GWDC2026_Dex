@@ -214,6 +214,10 @@
 	width: 100%;
 	max-width: none;
 	min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   }
   
   .mono {
@@ -296,6 +300,9 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
   }
   
   .empty {

@@ -262,11 +262,12 @@ onBeforeUnmount(() => {
 	display: grid;
 	grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 0.9fr);
 	gap: 12px;
-	align-items: start;
+	align-items: stretch;
 }
 
 .bottomGrid > * {
 	min-width: 0;
+	height: 420px;
 }
 
 
@@ -276,6 +277,9 @@ onBeforeUnmount(() => {
 	}
 	.bottomGrid {
 		grid-template-columns: 1fr;
+	}
+	.bottomGrid > * {
+		height: auto;
 	}
 }
 </style>

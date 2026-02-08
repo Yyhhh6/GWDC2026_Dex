@@ -337,6 +337,9 @@ onBeforeUnmount(() => {
 	min-width: 0;
 	overflow: hidden;
 	box-sizing: border-box;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
 }
 
 .header {
@@ -383,6 +386,11 @@ onBeforeUnmount(() => {
 	border: 1px solid rgba(255, 255, 255, 0.10);
 	border-radius: 14px;
 	padding: 14px;
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
 }
 
 .row {
@@ -417,6 +425,9 @@ onBeforeUnmount(() => {
 	margin-top: 8px;
 	padding-top: 8px;
 	border-top: 1px solid rgba(255, 255, 255, 0.10);
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
 }
 
 .empty {

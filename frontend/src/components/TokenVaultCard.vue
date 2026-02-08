@@ -19,11 +19,20 @@
 			</div>
 
 			<div class="row">
-				<div class="label">DEX 已充值</div>
+				<div class="label">DEX 余额</div>
 				<div class="value mono">
 					<span v-if="!walletAddress">未连接</span>
 					<span v-else-if="balancesLoading">读取中…</span>
 					<span v-else>{{ dexBalanceWithUnit }}</span>
+				</div>
+			</div>
+
+			<div class="row">
+				<div class="label">总额</div>
+				<div class="value mono">
+					<span v-if="!walletAddress">未连接</span>
+					<span v-else-if="balancesLoading">读取中…</span>
+					<span v-else>{{ totalBalanceWithUnit }}</span>
 				</div>
 			</div>
 
@@ -119,6 +128,8 @@ const walletBalanceDisplay = computed(() => formatAmount(walletBalance.value));
 const dexBalanceDisplay = computed(() => formatAmount(dexBalance.value));
 const allowanceDisplay = computed(() => formatAmount(allowance.value));
 
+const totalBalanceDisplay = computed(() => formatAmount((walletBalance.value ?? 0n) + (dexBalance.value ?? 0n)));
+
 const unitLabel = computed(() => tokenSymbol.value || String(props.fallbackSymbol || "").trim() || "TOKEN");
 
 const walletBalanceWithUnit = computed(() => {
@@ -129,6 +140,11 @@ const walletBalanceWithUnit = computed(() => {
 const dexBalanceWithUnit = computed(() => {
 	const u = String(unitLabel.value || "").trim();
 	return u ? `${dexBalanceDisplay.value} ${u}` : dexBalanceDisplay.value;
+});
+
+const totalBalanceWithUnit = computed(() => {
+	const u = String(unitLabel.value || "").trim();
+	return u ? `${totalBalanceDisplay.value} ${u}` : totalBalanceDisplay.value;
 });
 
 function formatAddr(addr) {
@@ -365,6 +381,9 @@ onBeforeUnmount(() => {
 	min-width: 0;
 	overflow: hidden;
 	box-sizing: border-box;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
 }
 
 .header {
@@ -410,6 +429,9 @@ onBeforeUnmount(() => {
 	border: 1px solid rgba(255, 255, 255, 0.10);
 	border-radius: 14px;
 	padding: 14px;
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
 }
 
 .row {
@@ -496,7 +518,7 @@ onBeforeUnmount(() => {
 
 .actions {
 	display: grid;
-	grid-template-columns: 1fr 1fr;
+	grid-template-columns: 1fr;
 	gap: 10px;
 	margin-top: 12px;
 	justify-content: center;
@@ -513,6 +535,7 @@ onBeforeUnmount(() => {
 	font-weight: 900;
 	letter-spacing: 0.06em;
 	color: rgba(255, 255, 255, 0.92);
+	text-align: center;
 	cursor: pointer;
 	transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease, opacity 0.12s ease;
 }
