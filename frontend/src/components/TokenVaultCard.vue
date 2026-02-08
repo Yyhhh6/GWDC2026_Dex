@@ -1,84 +1,53 @@
 <template>
 	<section class="vault">
 		<div class="header">
-			<h2 class="title">Token Vault</h2>
-			<div class="sub">Deposit / Withdraw to DEX</div>
+			<div class="titleRow">
+				<span class="badge">VAULT</span>
+				<h2 class="title">Token Vault</h2>
+			</div>
 		</div>
 
 		<div class="card">
-			<div class="row">
-				<div class="label">Token</div>
-				<div class="value">
-					<span v-if="metaLoading">读取中…</span>
-					<span v-else>{{ tokenName || "-" }}</span>
-					<span class="sep">·</span>
-					<span class="mono">{{ tokenSymbol || "-" }}</span>
-				</div>
-			</div>
-
-			<div class="row">
-				<div class="label">合约地址</div>
-				<div class="value mono" :title="tokenAddress">{{ formatAddr(tokenAddress) }}</div>
-			</div>
-
-			<div class="row">
-				<div class="label">钱包地址</div>
-				<div class="value mono">
-					<span v-if="!walletAddress">未连接</span>
-					<span v-else>{{ formatAddr(walletAddress) }}</span>
-				</div>
-			</div>
 
 			<div class="row">
 				<div class="label">钱包余额</div>
 				<div class="value mono">
-					<span v-if="!walletAddress">-</span>
+					<span v-if="!walletAddress">未连接</span>
 					<span v-else-if="balancesLoading">读取中…</span>
-					<span v-else>{{ walletBalanceDisplay }}</span>
+					<span v-else>{{ walletBalanceWithUnit }}</span>
 				</div>
 			</div>
 
 			<div class="row">
 				<div class="label">DEX 已充值</div>
 				<div class="value mono">
-					<span v-if="!walletAddress">-</span>
+					<span v-if="!walletAddress">未连接</span>
 					<span v-else-if="balancesLoading">读取中…</span>
-					<span v-else>{{ dexBalanceDisplay }}</span>
-				</div>
-			</div>
-
-			<div class="row">
-				<div class="label">授权额度</div>
-				<div class="value mono">
-					<span v-if="!walletAddress">-</span>
-					<span v-else-if="balancesLoading">读取中…</span>
-					<span v-else>{{ allowanceDisplay }}</span>
+					<span v-else>{{ dexBalanceWithUnit }}</span>
 				</div>
 			</div>
 
 			<div class="form">
 				<label class="inputLabel">数量</label>
-				<input
-					v-model="amount"
-					class="input"
-					type="text"
-					inputmode="decimal"
-					placeholder="0.0"
-				/>
-				<div class="formHint">单位：{{ tokenSymbol || "token" }}</div>
+				<div class="inputWrap">
+					<input
+						v-model="amount"
+						class="input"
+						type="text"
+						inputmode="decimal"
+						placeholder="0.0"
+					/>
+					<div class="unit">{{ unitLabel }}</div>
+				</div>
 			</div>
 
 			<div class="actions">
-				<button class="btn" type="button" :disabled="busy" @click="onDeposit">
-					{{ busy ? "处理中…" : "充值到 DEX" }}
+				<button class="cta cta--deposit" type="button" :disabled="busy" @click="onDeposit">
+					{{ busy ? "处理中…" : "充值" }}
 				</button>
-				<button class="btn" type="button" :disabled="busy" @click="onWithdraw">
-					{{ busy ? "处理中…" : "从 DEX 提取" }}
+				<button class="cta cta--withdraw" type="button" :disabled="busy" @click="onWithdraw">
+					{{ busy ? "处理中…" : "提取" }}
 				</button>
-			</div>
-
-			<div class="links">
-				<a class="link" :href="explorerUrl" target="_blank" rel="noreferrer">查看 Token 合约</a>
 			</div>
 
 			<div v-if="error" class="msg error">{{ error }}</div>
@@ -88,7 +57,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { Contract, JsonRpcProvider, formatUnits, isAddress, parseUnits } from "ethers";
 
 import { PHAROS_ATLANTIC, PHAROS_ATLANTIC_EXPLORER_BASE, PHAROS_ATLANTIC_RPC_URL } from "../lib/pharos";
@@ -98,6 +67,14 @@ const props = defineProps({
 	tokenAddress: {
 		type: String,
 		required: true,
+	},
+	fallbackSymbol: {
+		type: String,
+		default: "",
+	},
+	fallbackDecimals: {
+		type: Number,
+		default: 18,
 	},
 });
 
@@ -109,8 +86,8 @@ const balancesLoading = ref(false);
 const busy = ref(false);
 
 const tokenName = ref("");
-const tokenSymbol = ref("");
-const tokenDecimals = ref(18);
+const tokenSymbol = ref(String(props.fallbackSymbol || ""));
+const tokenDecimals = ref(Number.isFinite(Number(props.fallbackDecimals)) ? Number(props.fallbackDecimals) : 18);
 
 const walletBalance = ref(0n);
 const dexBalance = ref(0n);
@@ -141,6 +118,18 @@ const explorerUrl = computed(() => {
 const walletBalanceDisplay = computed(() => formatAmount(walletBalance.value));
 const dexBalanceDisplay = computed(() => formatAmount(dexBalance.value));
 const allowanceDisplay = computed(() => formatAmount(allowance.value));
+
+const unitLabel = computed(() => tokenSymbol.value || String(props.fallbackSymbol || "").trim() || "TOKEN");
+
+const walletBalanceWithUnit = computed(() => {
+	const u = String(unitLabel.value || "").trim();
+	return u ? `${walletBalanceDisplay.value} ${u}` : walletBalanceDisplay.value;
+});
+
+const dexBalanceWithUnit = computed(() => {
+	const u = String(unitLabel.value || "").trim();
+	return u ? `${dexBalanceDisplay.value} ${u}` : dexBalanceDisplay.value;
+});
 
 function formatAddr(addr) {
 	const a = String(addr || "");
@@ -188,6 +177,9 @@ async function loadMeta() {
 	status.value = "";
 
 	const tokenAddr = String(props.tokenAddress || "").trim();
+	tokenName.value = "";
+	tokenSymbol.value = String(props.fallbackSymbol || "");
+	tokenDecimals.value = Number.isFinite(Number(props.fallbackDecimals)) ? Number(props.fallbackDecimals) : 18;
 	if (!isAddress(tokenAddr)) {
 		error.value = "tokenAddress 无效";
 		return;
@@ -337,6 +329,14 @@ onMounted(async () => {
 	}
 });
 
+watch(
+	() => String(props.tokenAddress || "").trim(),
+	async () => {
+		await loadMeta();
+		await refreshBalances();
+	}
+);
+
 onBeforeUnmount(() => {
 	if (ethForListeners?.removeListener) {
 		if (accountsHandler) ethForListeners.removeListener("accountsChanged", accountsHandler);
@@ -347,32 +347,69 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .vault {
-	margin-top: 16px;
+	margin-top: 0;
+	--bg: #0b0f14;
+	--panel2: rgba(255, 255, 255, 0.04);
+	--text: rgba(255, 255, 255, 0.92);
+	--muted: rgba(255, 255, 255, 0.55);
+
+	background: radial-gradient(1200px 700px at 20% 0%, rgba(0, 208, 132, 0.10), transparent 55%),
+		radial-gradient(900px 600px at 90% 10%, rgba(255, 59, 105, 0.10), transparent 60%),
+		var(--bg);
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	border-radius: 14px;
+	padding: 14px;
+	color: var(--text);
+	width: 100%;
+	max-width: none;
+	min-width: 0;
+	overflow: hidden;
+	box-sizing: border-box;
 }
 
 .header {
 	display: flex;
 	justify-content: space-between;
-	align-items: baseline;
+	align-items: center;
 	gap: 12px;
-	margin-bottom: 10px;
+	margin-bottom: 12px;
+}
+
+.titleRow {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.badge {
+	padding: 4px 8px;
+	border-radius: 999px;
+	font-weight: 900;
+	font-size: 11px;
+	letter-spacing: 0.12em;
+	background: linear-gradient(90deg, rgba(0, 208, 132, 0.22), rgba(86, 195, 255, 0.16));
+	border: 1px solid rgba(255, 255, 255, 0.10);
+	color: rgba(255, 255, 255, 0.92);
+	flex: 0 0 auto;
 }
 
 .title {
 	margin: 0;
 	font-size: 16px;
+	color: rgba(255, 255, 255, 0.92);
 }
 
 .sub {
 	font-size: 12px;
-	color: #666;
+	color: rgba(255, 255, 255, 0.55);
 }
 
 .card {
-	border: 1px solid #ccc;
-	border-radius: 12px;
-	background: white;
-	padding: 12px;
+	background: rgba(255, 255, 255, 0.05);
+	border: 1px solid rgba(255, 255, 255, 0.10);
+	border-radius: 14px;
+	padding: 14px;
 }
 
 .row {
@@ -384,13 +421,14 @@ onBeforeUnmount(() => {
 
 .label {
 	font-size: 12px;
-	color: #666;
+	color: rgba(255, 255, 255, 0.55);
 	font-weight: 600;
 }
 
 .value {
 	font-size: 12px;
 	text-align: right;
+	color: rgba(255, 255, 255, 0.88);
 }
 
 .mono {
@@ -400,7 +438,7 @@ onBeforeUnmount(() => {
 
 .sep {
 	margin: 0 6px;
-	color: #bbb;
+	color: rgba(255, 255, 255, 0.35);
 }
 
 .form {
@@ -410,7 +448,7 @@ onBeforeUnmount(() => {
 .inputLabel {
 	display: block;
 	font-size: 12px;
-	color: #666;
+	color: rgba(255, 255, 255, 0.55);
 	font-weight: 600;
 	margin-bottom: 6px;
 }
@@ -419,65 +457,96 @@ onBeforeUnmount(() => {
 	width: 100%;
 	height: 36px;
 	padding: 0 10px;
-	border: 1px solid #ccc;
+	border: 1px solid rgba(255, 255, 255, 0.12);
 	border-radius: 10px;
 	font-size: 13px;
+	background: rgba(255, 255, 255, 0.04);
+	color: rgba(255, 255, 255, 0.90);
+	outline: none;
+}
+
+.inputWrap {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	align-items: center;
+	gap: 10px;
+}
+
+.unit {
+	font-size: 12px;
+	font-weight: 900;
+	letter-spacing: 0.06em;
+	color: rgba(255, 255, 255, 0.70);
+	padding: 8px 10px;
+	border-radius: 12px;
+	background: rgba(255, 255, 255, 0.04);
+	border: 1px solid rgba(255, 255, 255, 0.10);
+	white-space: nowrap;
+}
+
+.input:focus {
+	border-color: rgba(86, 195, 255, 0.35);
 }
 
 .formHint {
 	margin-top: 6px;
 	font-size: 12px;
-	color: #666;
+	color: rgba(255, 255, 255, 0.55);
 }
 
 .actions {
 	display: grid;
-	grid-template-columns: 1fr;
-	gap: 8px;
-	margin-top: 10px;
+	grid-template-columns: 1fr 1fr;
+	gap: 10px;
+	margin-top: 12px;
+	justify-content: center;
+	max-width: 420px;
+	margin-left: auto;
+	margin-right: auto;
+	align-items: stretch;
 }
 
-.btn {
-	height: 34px;
-	padding: 0 10px;
-	border: 1px solid #ccc;
-	border-radius: 10px;
-	background: white;
+.cta {
+	height: 44px;
+	border-radius: 14px;
+	border: 1px solid rgba(255, 255, 255, 0.10);
+	font-weight: 900;
+	letter-spacing: 0.06em;
+	color: rgba(255, 255, 255, 0.92);
 	cursor: pointer;
-	font-size: 13px;
-	font-weight: 600;
-	text-align: left;
-	color: inherit;
+	transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease, opacity 0.12s ease;
 }
 
-.btn:hover {
-	border-color: #999;
+.cta:hover:not(:disabled) {
+	transform: translateY(-1px);
+	border-color: rgba(255, 255, 255, 0.18);
 }
 
-.btn:disabled {
-	opacity: 0.6;
+.cta:disabled {
+	opacity: 0.55;
 	cursor: not-allowed;
 }
 
-.links {
-	margin-top: 10px;
+.cta--deposit {
+	background: linear-gradient(90deg, rgba(0, 208, 132, 0.30), rgba(86, 195, 255, 0.14));
+	border-color: rgba(0, 208, 132, 0.40);
+	box-shadow: 0 0 18px rgba(0, 208, 132, 0.18);
 }
 
-.link {
-	font-size: 12px;
-	color: inherit;
-	text-decoration: none;
-	border-bottom: 1px dashed #bbb;
+.cta--withdraw {
+	background: linear-gradient(90deg, rgba(255, 59, 105, 0.28), rgba(255, 59, 105, 0.10));
+	border-color: rgba(255, 59, 105, 0.40);
+	box-shadow: 0 0 18px rgba(255, 59, 105, 0.16);
 }
 
 .msg {
 	margin-top: 10px;
 	font-size: 12px;
-	color: #666;
+	color: rgba(255, 255, 255, 0.55);
 	word-break: break-all;
 }
 
 .msg.error {
-	color: #b42318;
+	color: rgba(255, 110, 110, 0.92);
 }
 </style>

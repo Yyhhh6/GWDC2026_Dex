@@ -432,7 +432,9 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .coins {
-	margin-top: 16px;
+	max-width: 1280px;
+	width: 100%;
+	margin: 16px auto 0;
 }
 
 .header {
@@ -445,29 +447,59 @@ onBeforeUnmount(() => {
 
 .title {
 	margin: 0;
-	font-size: 16px;
+	font-size: 20px;
+	color: rgba(255, 255, 255, 0.92);
 }
 
 .sub {
-	font-size: 12px;
-	color: #666;
+	font-size: 14px;
+	color: rgba(255, 255, 255, 0.55);
 }
 
 .note.warn {
-	color: #b42318;
+	color: rgba(255, 110, 110, 0.9);
 }
 
 .grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-	gap: 12px;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 16px;
+	align-items: stretch;
+}
+
+@media (max-width: 1240px) {
+	.grid {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 980px) {
+	.grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 560px) {
+	.grid {
+		grid-template-columns: 1fr;
+	}
 }
 
 .card {
-	border: 1px solid #ccc;
-	border-radius: 12px;
-	background: white;
-	padding: 12px;
+	--bg: #0b0f14;
+	--panel2: rgba(255, 255, 255, 0.04);
+	--text: rgba(255, 255, 255, 0.92);
+	--muted: rgba(255, 255, 255, 0.55);
+
+	border: 1px solid rgba(255, 255, 255, 0.09);
+	border-radius: 14px;
+	background: radial-gradient(900px 520px at 15% 0%, rgba(0, 208, 132, 0.10), transparent 55%),
+		radial-gradient(820px 520px at 95% 5%, rgba(86, 195, 255, 0.08), transparent 60%),
+		var(--bg);
+	padding: 16px;
+	color: var(--text);
+	min-width: 0;
+	overflow: hidden;
 }
 
 .card.clickable {
@@ -475,25 +507,29 @@ onBeforeUnmount(() => {
 }
 
 .card.clickable:hover {
-	border-color: #999;
+	border-color: rgba(255, 255, 255, 0.18);
+	background: radial-gradient(900px 520px at 15% 0%, rgba(0, 208, 132, 0.14), transparent 55%),
+		radial-gradient(820px 520px at 95% 5%, rgba(255, 59, 105, 0.08), transparent 60%),
+		#0b0f14;
 }
 
 .cardTop {
 	display: flex;
-	gap: 10px;
+	gap: 12px;
 	align-items: center;
 }
 
 .symWrap {
 	width: 40px;
 	height: 40px;
-	border: 1px solid #ccc;
+	border: 1px solid rgba(255, 255, 255, 0.10);
 	border-radius: 12px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	flex: 0 0 auto;
 	overflow: hidden;
+	background: rgba(255, 255, 255, 0.04);
 }
 
 .icon {
@@ -503,7 +539,7 @@ onBeforeUnmount(() => {
 }
 
 .sym {
-	font-size: 12px;
+	font-size: 13px;
 	font-weight: 700;
 }
 
@@ -512,13 +548,13 @@ onBeforeUnmount(() => {
 }
 
 .name {
-	font-size: 14px;
+	font-size: 17px;
 	font-weight: 700;
 }
 
 .hint {
-	font-size: 12px;
-	color: #666;
+	font-size: 14px;
+	color: rgba(255, 255, 255, 0.55);
 	margin-top: 2px;
 }
 
@@ -528,31 +564,32 @@ onBeforeUnmount(() => {
 
 .loading {
 	margin-left: 6px;
-	font-size: 12px;
-	color: #666;
+	font-size: 14px;
+	color: rgba(255, 255, 255, 0.55);
 	font-weight: 600;
 }
 
 .rows {
-	margin-top: 10px;
+	margin-top: 12px;
 }
 
 .row {
 	display: flex;
 	justify-content: space-between;
 	gap: 12px;
-	padding: 6px 0;
+	padding: 8px 0;
 }
 
 .label {
-	font-size: 12px;
-	color: #666;
+	font-size: 14px;
+	color: rgba(255, 255, 255, 0.55);
 	font-weight: 600;
 }
 
 .value {
-	font-size: 12px;
+	font-size: 14px;
 	text-align: right;
+	color: rgba(255, 255, 255, 0.88);
 }
 
 .mono {
@@ -561,24 +598,24 @@ onBeforeUnmount(() => {
 }
 
 .warn {
-	color: #b45309;
+	color: rgba(255, 211, 106, 0.95);
 }
 
 .actions {
 	display: grid;
 	grid-template-columns: 1fr;
-	gap: 8px;
-	margin-top: 10px;
+	gap: 10px;
+	margin-top: 12px;
 }
 
 .btn {
-	height: 34px;
-	padding: 0 10px;
-	border: 1px solid #ccc;
+	height: 38px;
+	padding: 0 12px;
+	border: 1px solid rgba(255, 255, 255, 0.12);
 	border-radius: 10px;
-	background: white;
+	background: rgba(255, 255, 255, 0.06);
 	cursor: pointer;
-	font-size: 13px;
+	font-size: 15px;
 	font-weight: 600;
 	text-align: left;
 	color: inherit;
@@ -588,7 +625,7 @@ onBeforeUnmount(() => {
 }
 
 .btn:hover {
-	border-color: #999;
+	border-color: rgba(255, 255, 255, 0.22);
 }
 
 .btn:disabled,
@@ -600,7 +637,7 @@ onBeforeUnmount(() => {
 
 .note {
 	margin-top: 10px;
-	font-size: 12px;
-	color: #666;
+	font-size: 14px;
+	color: rgba(255, 255, 255, 0.55);
 }
 </style>

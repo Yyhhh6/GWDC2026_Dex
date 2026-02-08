@@ -1,18 +1,13 @@
 <template>
 	<section class="assets">
 		<div class="header">
-			<h2 class="title">Assets</h2>
-			<div class="sub">DEX vault balances</div>
+			<div class="titleRow">
+				<span class="badge">ASSET</span>
+				<h2 class="title">All Assets</h2>
+			</div>
 		</div>
 
 		<div class="card">
-			<div class="row">
-				<div class="label">钱包</div>
-				<div class="value mono">
-					<span v-if="!walletAddress">未连接</span>
-					<span v-else>{{ formatAddr(walletAddress) }}</span>
-				</div>
-			</div>
 
 			<div class="row">
 				<div class="label">Quote（钱包）</div>
@@ -29,6 +24,15 @@
 					<span v-if="!walletAddress">-</span>
 					<span v-else-if="loading">读取中…</span>
 					<span v-else>{{ quoteDexDisplay }}</span>
+				</div>
+			</div>
+
+			<div class="row">
+				<div class="label">Quote（总额）</div>
+				<div class="value mono">
+					<span v-if="!walletAddress">-</span>
+					<span v-else-if="loading">读取中…</span>
+					<span v-else>{{ quoteTotalDisplay }}</span>
 				</div>
 			</div>
 
@@ -52,6 +56,7 @@
 						<div class="right">
 							<div class="mono">钱包：{{ a.walletDisplay }}</div>
 							<div class="mono">DEX：{{ a.dexDisplay }}</div>
+							<div class="mono">总额：{{ a.totalDisplay }}</div>
 						</div>
 					</div>
 				</div>
@@ -106,6 +111,12 @@ const quoteWalletDisplay = computed(() => {
 const quoteDexDisplay = computed(() => {
 	const sym = quoteSymbol.value ? ` ${quoteSymbol.value}` : "";
 	return `${formatAmount(quoteDexRaw.value, quoteDecimals.value)}${sym}`;
+});
+
+const quoteTotalDisplay = computed(() => {
+	const sym = quoteSymbol.value ? ` ${quoteSymbol.value}` : "";
+	const total = (quoteWalletRaw.value ?? 0n) + (quoteDexRaw.value ?? 0n);
+	return `${formatAmount(total, quoteDecimals.value)}${sym}`;
 });
 
 function getEthereum() {
@@ -234,6 +245,7 @@ async function loadBases(trader) {
 			name = r.name;
 			symbol = r.symbol;
 			const symSuffix = symbol ? ` ${symbol}` : "";
+			const totalRaw = (r.walletRaw ?? 0n) + (r.dexRaw ?? 0n);
 			return {
 				address: r.address,
 				name,
@@ -243,6 +255,8 @@ async function loadBases(trader) {
 				dexRaw: r.dexRaw,
 				walletDisplay: `${formatAmount(r.walletRaw, r.decimals)}${symSuffix}`,
 				dexDisplay: `${formatAmount(r.dexRaw, r.decimals)}${symSuffix}`,
+				totalRaw,
+				totalDisplay: `${formatAmount(totalRaw, r.decimals)}${symSuffix}`,
 				icon: pickIcon(symbol, name),
 			};
 		});
@@ -305,32 +319,70 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .assets {
-	margin-top: 16px;
+	margin-top: 0;
+	--bg: #0b0f14;
+	--panel2: rgba(255, 255, 255, 0.04);
+	--text: rgba(255, 255, 255, 0.92);
+	--muted: rgba(255, 255, 255, 0.55);
+
+	background: radial-gradient(1200px 700px at 20% 0%, rgba(0, 208, 132, 0.10), transparent 55%),
+		radial-gradient(900px 600px at 90% 10%, rgba(255, 59, 105, 0.10), transparent 60%),
+		var(--bg);
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	border-radius: 14px;
+	padding: 14px;
+	color: var(--text);
+	width: 100%;
+	max-width: none;
+	min-width: 0;
+	overflow: hidden;
+	box-sizing: border-box;
 }
 
 .header {
 	display: flex;
 	justify-content: space-between;
-	align-items: baseline;
+	align-items: center;
 	gap: 12px;
-	margin-bottom: 10px;
+	margin-bottom: 12px;
+}
+
+.titleRow {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.badge {
+	padding: 4px 8px;
+	border-radius: 999px;
+	font-weight: 900;
+	font-size: 11px;
+	letter-spacing: 0.12em;
+	background: linear-gradient(90deg, rgba(0, 208, 132, 0.22), rgba(86, 195, 255, 0.16));
+	border: 1px solid rgba(255, 255, 255, 0.10);
+	color: rgba(255, 255, 255, 0.92);
+	flex: 0 0 auto;
 }
 
 .title {
 	margin: 0;
 	font-size: 16px;
+	color: rgba(255, 255, 255, 0.92);
 }
 
 .sub {
 	font-size: 12px;
-	color: #666;
+	color: rgba(255, 255, 255, 0.55);
 }
 
+
 .card {
-	border: 1px solid #ccc;
-	border-radius: 12px;
-	background: white;
-	padding: 12px;
+	background: rgba(255, 255, 255, 0.05);
+	border: 1px solid rgba(255, 255, 255, 0.10);
+	border-radius: 14px;
+	padding: 14px;
 }
 
 .row {
@@ -342,13 +394,14 @@ onBeforeUnmount(() => {
 
 .label {
 	font-size: 12px;
-	color: #666;
+	color: rgba(255, 255, 255, 0.55);
 	font-weight: 600;
 }
 
 .value {
 	font-size: 12px;
 	text-align: right;
+	color: rgba(255, 255, 255, 0.88);
 }
 
 .mono {
@@ -357,18 +410,18 @@ onBeforeUnmount(() => {
 }
 
 .warn {
-	color: #b45309;
+	color: rgba(255, 211, 106, 0.95);
 }
 
 .list {
 	margin-top: 8px;
 	padding-top: 8px;
-	border-top: 1px dashed #ddd;
+	border-top: 1px solid rgba(255, 255, 255, 0.10);
 }
 
 .empty {
 	font-size: 12px;
-	color: #666;
+	color: rgba(255, 255, 255, 0.55);
 	padding: 6px 0;
 }
 
@@ -390,10 +443,10 @@ onBeforeUnmount(() => {
 .icon {
 	width: 28px;
 	height: 28px;
-	border: 1px solid #ccc;
+	border: 1px solid rgba(255, 255, 255, 0.12);
 	border-radius: 10px;
 	padding: 4px;
-	background: white;
+	background: rgba(255, 255, 255, 0.04);
 	flex: 0 0 auto;
 }
 
@@ -413,12 +466,13 @@ onBeforeUnmount(() => {
 .hint {
 	margin-top: 2px;
 	font-size: 12px;
-	color: #666;
+	color: rgba(255, 255, 255, 0.55);
 }
 
 .right {
 	font-size: 12px;
 	text-align: right;
 	line-height: 1.25;
+	color: rgba(255, 255, 255, 0.86);
 }
 </style>

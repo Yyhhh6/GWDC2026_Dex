@@ -3,46 +3,26 @@
       <!-- Header -->
       <div class="lo__head">
         <div class="lo__title">
-          <span class="lo__badge">MY</span>
-          <span class="lo__name">我的挂单</span>
+          <span class="lo__badge">ORDER</span>
+          <span class="lo__name">My Orders</span>
         </div>
-  
-        <div class="lo__meta">
-          <div class="row">
-            <span class="k">Wallet</span>
-            <span class="v mono">{{ short(walletAddress) }}</span>
-          </div>
-          <div class="row">
-            <span class="k">Base</span>
-            <span class="v mono">{{ short(baseAddress) }}</span>
-          </div>
-          <div class="row">
-            <span class="k">Symbol</span>
-            <span class="v mono">{{ baseSymbol || "—" }}</span>
-          </div>
-        </div>
-      </div>
-  
-      <!-- Actions (layout only) -->
-      <div class="lo__actions">
-        <button class="btn btn--primary" @click="refresh" :disabled="disabled">
-          <span class="dot" aria-hidden="true"></span>
-          刷新挂单
-        </button>
-        <div class="hint mono">按时间倒序（最新在上）</div>
+		<button class="btn btn--primary lo__refresh" @click="refresh" :disabled="disabled">
+			<span class="dot" aria-hidden="true"></span>
+			Refresh
+		</button>
       </div>
   
       <!-- List -->
       <div class="lo__list">
-        <div v-if="sortedOrders.length === 0" class="empty">
-          暂无挂单
-        </div>
+        <div v-if="loading" class="empty">Loading…</div>
+        <div v-else-if="error" class="empty">{{ error }}</div>
+        <div v-else-if="sortedOrders.length === 0" class="empty">No open orders</div>
   
         <div v-for="o in sortedOrders" :key="o.id" class="card">
           <!-- top line -->
           <div class="card__top">
             <div class="side" :class="o.side === 'BUY' ? 'buy' : 'sell'">
-              {{ o.side === "BUY" ? "买入" : "卖出" }}
+              {{ o.side === "BUY" ? "Buy" : "Sell" }}
             </div>
   
             <div class="time mono">
@@ -53,21 +33,18 @@
           <!-- main fields -->
           <div class="grid">
             <div class="item">
-              <div class="label">成交价</div>
-              <div class="value mono">{{ fmt(o.price, 6) }}</div>
-              <div class="sub">price (scaled 1e18)</div>
+              <div class="label">Price</div>
+              <div class="value mono">{{ fmtPrice(o.price) }}</div>
             </div>
   
             <div class="item">
-              <div class="label">期望成交量</div>
-              <div class="value mono">{{ fmtInt(o.amountBase) }}</div>
-              <div class="sub">amountBase (base units)</div>
+              <div class="label">Amount</div>
+              <div class="value mono">{{ fmtBase(o.amountBase) }}</div>
             </div>
   
             <div class="item">
-              <div class="label">已成交量</div>
-              <div class="value mono">{{ fmtInt(o.filledBase) }}</div>
-              <div class="sub">filledBase (base units)</div>
+              <div class="label">Filled</div>
+              <div class="value mono">{{ fmtBase(o.filledBase) }}</div>
             </div>
           </div>
   
@@ -86,7 +63,10 @@
   </template>
   
   <script setup>
-  import { computed, ref } from "vue";
+  import { computed, onMounted, ref, toRefs, watch } from "vue";
+  import { formatUnits, isAddress } from "ethers";
+
+  import { callDex } from "../lib/dex";
   
   /**
    * props: 用户钱包地址 + base币地址 + base币符号
@@ -95,30 +75,56 @@
     walletAddress: { type: String, default: "" },
     baseAddress: { type: String, default: "" },
     baseSymbol: { type: String, default: "" },
+    quoteSymbol: { type: String, default: "" },
+    baseDecimals: { type: Number, default: 18 },
+    quoteDecimals: { type: Number, default: 18 },
   });
+
+  const { walletAddress, baseAddress, baseSymbol, quoteSymbol, baseDecimals, quoteDecimals } = toRefs(props);
   
-  const { walletAddress, baseAddress, baseSymbol } = props;
+  const loading = ref(false);
+  const error = ref("");
+  const orders = ref([]);
   
-  /**
-   * 这里只是布局占位：mock 挂单列表
-   * 你接合约时：把 orders.value 替换成从合约读出来的 Order[]
-   */
-  const orders = ref([
-    // timestamp: 秒
-    { id: 1, side: "BUY", price: 0.123456, amountBase: "500000000", filledBase: "120000000", timestamp: 1739000000 },
-    { id: 2, side: "SELL", price: 0.1239, amountBase: "300000000", filledBase: "300000000", timestamp: 1738990000 },
-    { id: 3, side: "BUY", price: 0.1233, amountBase: "800000000", filledBase: "0", timestamp: 1738980000 },
-  ]);
-  
-  const disabled = computed(() => !props.walletAddress || !props.baseAddress);
+  const disabled = computed(() => !walletAddress.value || !baseAddress.value);
   
   const sortedOrders = computed(() => {
-    return [...orders.value].sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
+    return [...orders.value]
+    .filter(o => o?.active !== false)
+    .sort((a, b) => Number(b.timestamp || 0) - Number(a.timestamp || 0));
   });
   
-  function refresh() {
-    // TODO: 这里后续接入链上读取
-    // orders.value = await readMyLimitOrders(wallet, base)
+  async function refresh() {
+  if (disabled.value) return;
+  error.value = "";
+  loading.value = true;
+  try {
+    const base = String(baseAddress.value || "").trim();
+    const from = String(walletAddress.value || "").trim();
+    if (!isAddress(base) || !isAddress(from)) {
+      orders.value = [];
+      return;
+    }
+    const res = await callDex("getMyOpenOrdersFor", base, { from });
+    orders.value = (res || []).map(o => {
+      const sideNum = Number(o?.side ?? 0);
+      return {
+        id: String(o?.id ?? ""),
+        side: sideNum === 0 ? "BUY" : "SELL",
+        price: BigInt(o?.price ?? 0),
+        amountBase: BigInt(o?.amountBase ?? 0),
+        filledBase: BigInt(o?.filledBase ?? 0),
+        remainingBase: BigInt(o?.remainingBase ?? 0),
+        timestamp: Number(o?.timestamp ?? 0),
+        active: Boolean(o?.active),
+      };
+    });
+  } catch (e) {
+    error.value = e?.shortMessage || e?.message || "读取挂单失败";
+    orders.value = [];
+  } finally {
+    loading.value = false;
+  }
   }
   
   function short(addr) {
@@ -127,16 +133,23 @@
     return `${a.slice(0, 6)}…${a.slice(-4)}`;
   }
   
-  function fmt(x, d = 6) {
-    const n = Number(x);
-    if (!Number.isFinite(n)) return "—";
-    return n.toFixed(d);
+  function fmtUnitsSafe(v, d) {
+	try {
+		const s = formatUnits(v ?? 0n, d ?? 18);
+		if (!s.includes(".")) return s;
+		const [a, b] = s.split(".");
+		return `${a}.${(b || "").slice(0, 6)}`.replace(/\.$/, "");
+	} catch {
+		return "0";
+	}
   }
-  
-  function fmtInt(x) {
-    // base最小单位先当字符串展示，接入时再 formatUnits
-    const s = String(x ?? "");
-    return s ? s : "0";
+
+  function fmtPrice(v) {
+	return fmtUnitsSafe(v ?? 0n, quoteDecimals.value);
+  }
+
+  function fmtBase(v) {
+	return fmtUnitsSafe(v ?? 0n, baseDecimals.value);
   }
   
   function fmtTime(ts) {
@@ -153,12 +166,23 @@
   }
   
   function fillPct(o) {
-    const a = BigInt(o.amountBase || 0);
-    const f = BigInt(o.filledBase || 0);
+    const a = BigInt(o.amountBase || 0n);
+    const f = BigInt(o.filledBase || 0n);
     if (a === 0n) return 0;
     const pct = Number((f * 10000n) / a) / 100; // 保留2位
     return Math.max(0, Math.min(100, pct));
   }
+
+  onMounted(async () => {
+	await refresh();
+  });
+
+  watch(
+	() => [walletAddress.value, baseAddress.value],
+	async () => {
+		await refresh();
+	}
+  );
   </script>
   
   <style lang="scss" scoped>
@@ -179,7 +203,9 @@
     border-radius: 14px;
     padding: 14px;
     color: var(--text);
-    max-width: 680px;
+	width: 100%;
+	max-width: none;
+	min-width: 0;
   }
   
   .mono {
@@ -189,9 +215,15 @@
   .lo__head {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     gap: 12px;
     margin-bottom: 12px;
   }
+
+	.lo__refresh {
+		flex: 0 0 auto;
+		white-space: nowrap;
+	}
   
   .lo__title {
     display: flex;
@@ -212,46 +244,6 @@
   .lo__name {
     font-size: 15px;
     font-weight: 900;
-  }
-  
-  .lo__meta {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    min-width: 240px;
-  
-    .row {
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 10px;
-      padding: 8px 10px;
-  
-      .k {
-        font-size: 12px;
-        color: var(--muted);
-        font-weight: 800;
-      }
-      .v {
-        font-size: 12px;
-        color: rgba(255, 255, 255, 0.88);
-      }
-    }
-  }
-  
-  .lo__actions {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 12px;
-  
-    .hint {
-      font-size: 12px;
-      color: rgba(255, 255, 255, 0.55);
-    }
   }
   
   .btn {

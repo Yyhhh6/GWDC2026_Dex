@@ -261,22 +261,23 @@ onBeforeUnmount(() => {
 	gap: 8px;
 	height: 36px;
 	padding: 0 12px;
-	border: 1px solid #ccc;
+	border: 1px solid rgba(255, 255, 255, 0.12);
 	border-radius: 999px;
-	background: white;
+	background: rgba(255, 255, 255, 0.06);
 	cursor: pointer;
 	font-size: 14px;
 	font-weight: 600;
 	line-height: 1;
 	user-select: none;
+	color: rgba(255, 255, 255, 0.88);
 }
 
 .walletBtn:hover {
-	border-color: #999;
+	border-color: rgba(255, 255, 255, 0.22);
 }
 
 .walletBtn:active {
-	border-color: #666;
+	border-color: rgba(255, 255, 255, 0.30);
 }
 
 .walletBtn:disabled {
@@ -289,9 +290,11 @@ onBeforeUnmount(() => {
 	right: 0;
 	margin-top: 8px;
 	width: 260px;
-	border: 1px solid #ccc;
+	border: 1px solid rgba(255, 255, 255, 0.10);
 	border-radius: 12px;
-	background: white;
+	background: radial-gradient(900px 520px at 15% 0%, rgba(0, 208, 132, 0.10), transparent 55%),
+		radial-gradient(820px 520px at 95% 5%, rgba(255, 59, 105, 0.08), transparent 60%),
+		#0b0f14;
 	padding: 12px;
 	z-index: 10;
 }
@@ -304,7 +307,7 @@ onBeforeUnmount(() => {
 }
 
 .label {
-	color: #666;
+	color: rgba(255, 255, 255, 0.55);
 	font-size: 12px;
 	font-weight: 600;
 }
@@ -312,10 +315,11 @@ onBeforeUnmount(() => {
 .value {
 	text-align: right;
 	font-size: 12px;
+	color: rgba(255, 255, 255, 0.88);
 }
 
 .warn {
-	color: #b45309;
+	color: rgba(255, 211, 106, 0.95);
 }
 
 .mono {
@@ -333,30 +337,31 @@ onBeforeUnmount(() => {
 .actionBtn {
 	height: 34px;
 	padding: 0 10px;
-	border: 1px solid #ccc;
+	border: 1px solid rgba(255, 255, 255, 0.12);
 	border-radius: 10px;
-	background: white;
+	background: rgba(255, 255, 255, 0.06);
 	cursor: pointer;
 	font-size: 13px;
 	font-weight: 600;
 	text-align: left;
+	color: rgba(255, 255, 255, 0.88);
 }
 
 .actionBtn:hover {
-	border-color: #999;
+	border-color: rgba(255, 255, 255, 0.22);
 }
 
 .actionBtn.primary {
-	border-color: #999;
+	border-color: rgba(0, 208, 132, 0.35);
 }
 
 .actionBtn.danger {
-	border-color: #c2410c;
+	border-color: rgba(255, 59, 105, 0.45);
 }
 
 .error {
 	margin-top: 10px;
-	color: #b91c1c;
+	color: rgba(255, 110, 110, 0.9);
 	font-size: 12px;
 	word-break: break-word;
 }
