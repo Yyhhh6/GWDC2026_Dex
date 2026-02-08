@@ -84,7 +84,7 @@ const priceHistory = ref([])
 /* ========= demo data ========= */
 const buildDemoTicks = () => {
   let T = 1000
-  const startRaw = Date.now() - T * 15
+  const startRaw = Date.now() - T * 20
   const start = Math.ceil(startRaw / 5000) * 5000
   const ticks = [
     {timestamp: start, price: 0.},
@@ -101,8 +101,13 @@ const buildDemoTicks = () => {
     {timestamp: start + T * 11, price: 0.90},
     {timestamp: start + T * 12, price: 0.20},
     {timestamp: start + T * 13, price: 0.22},
-    {timestamp: start + T * 14, price: 0.57},
-    {timestamp: start + T * 15, price: 0.9},
+    {timestamp: start + T * 14, price: 0.90},
+    {timestamp: start + T * 15, price: 0.90},
+    {timestamp: start + T * 16, price: 0.6},
+    {timestamp: start + T * 17, price: 0.6},
+    {timestamp: start + T * 18, price: 0.6},
+    {timestamp: start + T * 19, price: 0.5},
+    {timestamp: start + T * 20, price: 0.6}
   ]
 
 //   console.log('demo ticks: ', ticks)
