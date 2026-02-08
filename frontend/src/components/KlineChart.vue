@@ -18,12 +18,12 @@
       </div> -->
     </div>
 
-    <div ref="chartEl" class="chart"></div>
+    <div id="chart_box" class="chart"></div>
   </div>
 </template>
 
 <script setup>
-import { ref, onBeforeUnmount, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { init } from 'klinecharts';
 import { ethers } from 'ethers';
 
@@ -50,12 +50,9 @@ const timeframes = Object.entries(timeframeConfigs).map(
 
 const active = ref('5M')
 
-const chartEl = ref(null)
-
 /* ========= chart ========= */
 let chart = null
 let hasRenderedData = false
-let isDestroyed = false
 
 /* ========= DEX / Contract ========= */
 const DEX = '0x887D9Af1241a176107d31Bb3C69787DFff6dbaD8'
@@ -87,7 +84,8 @@ const priceHistory = ref([])
 /* ========= demo data ========= */
 const buildDemoTicks = () => {
   let T = 1000
-  const start = Date.now() - T * 15 // 1 hour ago
+  const startRaw = Date.now() - T * 15
+  const start = Math.ceil(startRaw / 5000) * 5000
   const ticks = [
     {timestamp: start, price: 0.},
     {timestamp: start + T , price: 0.93},
@@ -216,19 +214,14 @@ let tickTimer = null
 const startTick = () => {
   stopTick()
   tickTimer = setInterval(async () => {
-    if (isDestroyed) return
-    try {
-      const price = await fetchLatestPrice()
-      if (isDestroyed) return
-      const nowMs = Date.now()
+    const price = await fetchLatestPrice()
+    const nowMs = Date.now()
+    // console.log('fetched price: ', price, ' at ', new Date(nowMs).toLocaleTimeString())
 
-      latestPrice.value = price
-      priceHistory.value.push({ timestamp: nowMs, price })
-      pushTickToCandle(price, nowMs)
-      renderLatestCandle()
-    } catch {
-      // ignore: 避免定时器异常导致组件卸载/路由切换被影响
-    }
+    latestPrice.value = price
+    priceHistory.value.push({ timestamp: nowMs, price })
+    pushTickToCandle(price, nowMs)
+    renderLatestCandle()
   }, 1000)
 }
 
@@ -246,13 +239,8 @@ const changeTimeframe = (tf) => {
 
 /* ========= lifecycle ========= */
 onMounted(() => {
-  isDestroyed = false
   // 初始化图表
-  try {
-    chart = chartEl.value ? init(chartEl.value) : null
-  } catch {
-    chart = null
-  }
+  chart = init("chart_box");
 
   // 设置图表样式
   const styles = {
@@ -318,19 +306,11 @@ onMounted(() => {
   startTick()
 })
 
-onBeforeUnmount(() => {
-  isDestroyed = true
+onUnmounted(() => {
   stopTick()
-  try {
-    if (chart && typeof chart.dispose === 'function') chart.dispose()
-    else if (chart && typeof chart.destroy === 'function') chart.destroy()
-  } catch {
-    // ignore
-  }
+  chart?.dispose()
   chart = null
   hasRenderedData = false
-  provider = null
-  dex = null
 })
 </script>
 
