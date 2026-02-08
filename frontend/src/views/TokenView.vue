@@ -10,7 +10,14 @@
 
 		<div class="topGrid">
 			<div class="klinePanel">
-				<KlineChart />
+				<KlineChart
+					:walletAddress="walletAddress"
+					:baseAddress="address"
+					:baseSymbol="baseSymbol"
+					:quoteSymbol="quoteSymbol"
+					:quoteDecimals="quoteDecimals"
+					:baseDecimals="baseDecimals"
+				/>
 			</div>
 			<OrderBook
 				:walletAddress="walletAddress"

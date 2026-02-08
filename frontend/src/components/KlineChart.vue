@@ -10,12 +10,12 @@
         {{ tf.label }}
       </button>
 
-      <div class="price">
+      <!-- <div class="price">
         <span class="label">最新价</span>
         <span class="value">
           {{ latestPrice !== null ? latestPrice : '—' }}
         </span>
-      </div>
+      </div> -->
     </div>
 
     <div id="chart_box" class="chart"></div>
