@@ -282,6 +282,9 @@ onUnmounted(() => {
   border-radius: 12px;
   padding: 12px;
   color: #fff;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .toolbar {
@@ -289,6 +292,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   margin-bottom: 10px;
+  flex: 0 0 auto;
 }
 
 button {
@@ -312,6 +316,7 @@ button.active {
 
 .chart {
   width: 100%;
-  height: 420px;
+  flex: 1 1 auto;
+  min-height: 520px;
 }
 </style>

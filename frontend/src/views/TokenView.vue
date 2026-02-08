@@ -256,6 +256,12 @@ onBeforeUnmount(() => {
 	padding: 12px;
 	overflow: hidden;
 	min-width: 0;
+	min-height: 560px;
+	display: flex;
+}
+
+.klinePanel :deep(.kline-wrapper) {
+	flex: 1 1 auto;
 }
 
 .bottomGrid {
