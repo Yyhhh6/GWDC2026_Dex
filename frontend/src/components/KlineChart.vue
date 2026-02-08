@@ -59,6 +59,8 @@ const DEX_ABI = [
   "function getLastPriceFor(address base) view returns (uint256)",
 ]
 
+const CHART_START_TIMESTAMP = new Date('2026-02-08T00:00:00').getTime()
+
 let provider = null
 let dex = null
 
@@ -76,6 +78,7 @@ const latestPrice = ref(null)
 const candles = ref([])
 const lastCandle = ref(null)
 const startTimestamp = ref(null)
+const priceHistory = ref([])
 
 /* ========= fetch price ========= */
 const fetchLatestPrice = async () => {
@@ -87,15 +90,15 @@ const fetchLatestPrice = async () => {
 }
 
 /* ========= tick → candle ========= */
-const pushTickToCandle = (price, nowSec) => {
-  const interval = timeframeConfigs[active.value].seconds
+const pushTickToCandle = (price, nowMs) => {
+  const interval = timeframeConfigs[active.value].seconds * 1000
 
   if (!startTimestamp.value) {
-    startTimestamp.value = nowSec
+    startTimestamp.value = CHART_START_TIMESTAMP
   }
 
   const bucket =
-    Math.floor((nowSec - startTimestamp.value) / interval) * interval +
+    Math.floor((nowMs - startTimestamp.value) / interval) * interval +
     startTimestamp.value
 
   if (!lastCandle.value || lastCandle.value.timestamp !== bucket) {
@@ -116,6 +119,25 @@ const pushTickToCandle = (price, nowSec) => {
     lastCandle.value.low = Math.min(lastCandle.value.low, price)
     lastCandle.value.close = price
   }
+}
+
+const rebuildCandlesFromHistory = () => {
+  const history = priceHistory.value
+  if (!history.length) {
+    candles.value = []
+    lastCandle.value = null
+    startTimestamp.value = CHART_START_TIMESTAMP
+    return
+  }
+
+  const sorted = [...history].sort((a, b) => a.timestamp - b.timestamp)
+  candles.value = []
+  lastCandle.value = null
+  startTimestamp.value = CHART_START_TIMESTAMP
+
+  sorted.forEach(tick => {
+    pushTickToCandle(tick.price, tick.timestamp)
+  })
 }
 
 function normalizeData(list) {
@@ -146,10 +168,11 @@ const startTick = () => {
   stopTick()
   tickTimer = setInterval(async () => {
     const price = await fetchLatestPrice()
-    const nowSec = Math.floor(Date.now() / 1000)
+    const nowMs = Date.now()
 
     latestPrice.value = price
-    pushTickToCandle(price, nowSec)
+    priceHistory.value.push({ timestamp: nowMs, price })
+    pushTickToCandle(price, nowMs)
     renderChart()
   }, 1000)
 }
@@ -162,9 +185,8 @@ const stopTick = () => {
 /* ========= change timeframe ========= */
 const changeTimeframe = (tf) => {
   active.value = tf
-  candles.value = []
-  lastCandle.value = null
-  startTimestamp.value = null
+  rebuildCandlesFromHistory()
+  renderChart()
 }
 
 /* ========= lifecycle ========= */
