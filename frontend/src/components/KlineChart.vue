@@ -37,11 +37,11 @@ const props = defineProps({
 
 /* ========= timeframe ========= */
 const timeframeConfigs = {
-  '5S': { label: '5秒', seconds: 5 },
-  '1M': { label: '1分', seconds: 60 },
-  '5M': { label: '5分', seconds: 300 },
-  '15M': { label: '15分', seconds: 900 },
-  '1H': { label: '1小时', seconds: 3600 },
+  '5S': { label: '5s', seconds: 5 },
+  '1M': { label: '1m', seconds: 60 },
+  '5M': { label: '5m', seconds: 300 },
+  '15M': { label: '15m', seconds: 900 },
+  '1H': { label: '1h', seconds: 3600 },
 }
 
 const timeframes = Object.entries(timeframeConfigs).map(
@@ -244,7 +244,7 @@ onMounted(() => {
       tooltip: {
         showRule: 'follow_cross',
         showType: 'standard',
-        labels: ['时间', '开', '收', '高', '低', '成交量'],
+        labels: ['Time', 'Open', 'Close', 'High', 'Low', 'Volume'],
         values: ({ kLineData }) => {
           return [
             new Date(kLineData.timestamp).toLocaleString(),

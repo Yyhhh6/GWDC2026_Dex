@@ -6,21 +6,21 @@
 			:disabled="!hasProvider"
 			@click.stop="onPrimaryClick"
 		>
-			<span v-if="!hasProvider">未检测到钱包</span>
-			<span v-else-if="!isConnected">连接钱包</span>
+			<span v-if="!hasProvider">Wallet not detected</span>
+			<span v-else-if="!isConnected">Connect Wallet</span>
 			<span v-else>{{ shortAddress }}</span>
 		</button>
 
 		<div v-if="menuOpen && hasProvider" class="menu" @click.stop>
 			<div class="row">
-				<div class="label">网络</div>
+				<div class="label">Network</div>
 				<div class="value" :class="{ warn: !isOnTargetChain }">
 					{{ networkLabel }}
 				</div>
 			</div>
 
 			<div v-if="isConnected" class="row">
-				<div class="label">地址</div>
+				<div class="label">Address</div>
 				<div class="value mono">{{ shortAddress }}</div>
 			</div>
 
@@ -31,7 +31,7 @@
 					type="button"
 					@click="copyAddress"
 				>
-					复制地址
+					Copy Address
 				</button>
 
 				<button
@@ -40,7 +40,7 @@
 					type="button"
 					@click="ensureTargetChain"
 				>
-					切到 Pharos Atlantic
+					Switch to Pharos Atlantic
 				</button>
 
 				<button
@@ -49,7 +49,7 @@
 					type="button"
 					@click="connect"
 				>
-					连接
+					Connect
 				</button>
 
 				<button
@@ -58,7 +58,7 @@
 					type="button"
 					@click="disconnect"
 				>
-					断开
+					Disconnect
 				</button>
 			</div>
 
@@ -92,9 +92,9 @@ const shortAddress = computed(() => {
 });
 
 const networkLabel = computed(() => {
-	if (!chainIdHex.value) return "未知";
+	if (!chainIdHex.value) return "Unknown";
 	if (isOnTargetChain.value) return TARGET_CHAIN.chainName;
-	return `非目标网络 (${chainIdHex.value})`;
+	return `Wrong network (${chainIdHex.value})`;
 });
 
 function toChainIdHex(chainId) {
@@ -125,7 +125,7 @@ async function refreshState() {
 async function connect() {
 	errorMessage.value = "";
 	if (!window.ethereum) {
-		errorMessage.value = "未检测到钱包扩展（如 MetaMask）。";
+		errorMessage.value = "Wallet extension not detected (e.g., MetaMask).";
 		return;
 	}
 
@@ -185,7 +185,7 @@ async function ensureTargetChain() {
 }
 
 function disconnect() {
-	// EIP-1193 provider 通常不支持程序化断开，这里只清理本地状态
+	// EIP-1193 providers typically don't support programmatic disconnect; clear local state only.
 	menuOpen.value = false;
 	account.value = "";
 	errorMessage.value = "";
@@ -216,10 +216,10 @@ function onDocClick() {
 }
 
 function humanizeProviderError(err) {
-	if (!err) return "操作失败";
-	if (err?.code === 4001) return "用户取消了操作";
+	if (!err) return "Operation failed";
+	if (err?.code === 4001) return "User rejected the request";
 	if (typeof err?.message === "string" && err.message.trim()) return err.message;
-	return "操作失败";
+	return "Operation failed";
 }
 
 function onAccountsChanged(accounts) {

@@ -9,10 +9,10 @@
 			{{ listError }}
 		</div>
 		<div v-else-if="loadingList" class="note">
-			正在从 DEX 读取支持的 token 列表…
+			Loading supported tokens from the DEX…
 		</div>
 		<div v-else-if="!viewCoins.length" class="note">
-			DEX 暂未返回任何支持的 token。
+			No supported tokens returned by the DEX yet.
 		</div>
 
 		<div class="grid">
@@ -30,7 +30,7 @@
 					<div class="meta">
 						<div class="name">
 							{{ coin.displayName }}
-							<span v-if="coin.loading" class="loading">(读取中…)</span>
+							<span v-if="coin.loading" class="loading">(Loading…)</span>
 						</div>
 						<div class="hint">
 							{{ coin.displaySymbol }}
@@ -42,34 +42,34 @@
 
 				<div class="rows">
 					<div class="row">
-						<div class="label">合约地址</div>
+						<div class="label">Contract Address</div>
 						<div class="value mono" :title="coin.address || ''">{{ formatAddr(coin.address) }}</div>
 					</div>
 
 					<div class="row">
-						<div class="label">钱包余额</div>
+						<div class="label">Wallet Balance</div>
 						<div class="value mono">
-							<span v-if="!walletAddress">未连接</span>
-							<span v-else-if="coin.walletBalLoading">读取中…</span>
+							<span v-if="!walletAddress">Not connected</span>
+							<span v-else-if="coin.walletBalLoading">Loading…</span>
 							<span v-else>{{ coin.walletBalanceDisplay }}</span>
 						</div>
 					</div>
 
 					<div class="row">
-						<div class="label">DEX 已充值</div>
+						<div class="label">DEX Deposited</div>
 						<div class="value mono">
-							<span v-if="!walletAddress">未连接</span>
-							<span v-else-if="coin.dexBalLoading">读取中…</span>
+							<span v-if="!walletAddress">Not connected</span>
+							<span v-else-if="coin.dexBalLoading">Loading…</span>
 							<span v-else>{{ coin.dexBalanceDisplay }}</span>
 						</div>
 					</div>
 
 					<div v-if="coin.error" class="row">
-						<div class="label">状态</div>
+						<div class="label">Status</div>
 						<div class="value warn">{{ coin.error }}</div>
 					</div>
 					<div v-else-if="coin.balanceError" class="row">
-						<div class="label">状态</div>
+						<div class="label">Status</div>
 						<div class="value warn">{{ coin.balanceError }}</div>
 					</div>
 				</div>
@@ -81,7 +81,7 @@
 						:disabled="!coin.addressTrimmed"
 						@click.stop="copy(coin.key, coin.addressTrimmed)"
 					>
-						{{ copiedKey === coin.key ? "已复制" : "复制地址" }}
+						{{ copiedKey === coin.key ? "Copied" : "Copy Address" }}
 					</button>
 					<a
 						class="btn"
@@ -91,7 +91,7 @@
 						rel="noreferrer"
 						@click.stop="onExplorerClick($event, coin.addressTrimmed)"
 					>
-						查看区块浏览器
+						View Explorer
 					</a>
 				</div>
 			</article>
@@ -192,7 +192,7 @@ async function loadTokenMeta(key, address) {
 	if (!address || !isAddress(address)) {
 		metaByKey.value = {
 			...metaByKey.value,
-			[key]: { loading: false, name: "", symbol: "", decimals: null, error: "地址无效/未填写" },
+			[key]: { loading: false, name: "", symbol: "", decimals: null, error: "Invalid or missing address" },
 		};
 		return;
 	}
@@ -216,7 +216,7 @@ async function loadTokenMeta(key, address) {
 			},
 		};
 	} catch (err) {
-		const msg = typeof err?.shortMessage === "string" ? err.shortMessage : (err?.message || "读取失败");
+		const msg = typeof err?.shortMessage === "string" ? err.shortMessage : (err?.message || "Failed to load");
 		metaByKey.value = {
 			...metaByKey.value,
 			[key]: { loading: false, name: "", symbol: "", decimals: null, error: String(msg) },
@@ -276,7 +276,7 @@ async function loadTokenBalances(key, tokenAddress) {
 	if (!addr || !isAddress(addr)) {
 		balanceByKey.value = {
 			...balanceByKey.value,
-			[key]: { walletLoading: false, dexLoading: false, walletDisplay: "-", dexDisplay: "-", error: "token 地址无效" },
+			[key]: { walletLoading: false, dexLoading: false, walletDisplay: "-", dexDisplay: "-", error: "Invalid token address" },
 		};
 		return;
 	}
@@ -299,7 +299,7 @@ async function loadTokenBalances(key, tokenAddress) {
 			},
 		};
 	} catch (err) {
-		const msg = typeof err?.shortMessage === "string" ? err.shortMessage : (err?.message || "余额读取失败");
+		const msg = typeof err?.shortMessage === "string" ? err.shortMessage : (err?.message || "Failed to load balances");
 		balanceByKey.value = {
 			...balanceByKey.value,
 			[key]: { walletLoading: false, dexLoading: false, walletDisplay: "-", dexDisplay: "-", error: String(msg) },
@@ -313,7 +313,7 @@ async function refreshAllBalances() {
 }
 
 function formatAddr(addr) {
-	if (!addr) return "待填写";
+	if (!addr) return "Not set";
 	if (addr.length <= 12) return addr;
 	return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
@@ -404,7 +404,7 @@ onMounted(async () => {
 		await Promise.all(coins.value.map(c => loadTokenMeta(c.key, (c.address || "").trim())));
 		await refreshAllBalances();
 	} catch (err) {
-		const msg = typeof err?.shortMessage === "string" ? err.shortMessage : (err?.message || "读取 DEX 支持列表失败");
+		const msg = typeof err?.shortMessage === "string" ? err.shortMessage : (err?.message || "Failed to load DEX supported list");
 		listError.value = String(msg);
 		coins.value = [];
 	} finally {
@@ -416,7 +416,7 @@ onMounted(async () => {
 watch(
 	() => walletAddress.value,
 	async () => {
-		// 钱包连接/切换账号后刷新所有余额
+		// Refresh balances after wallet connect/account switch.
 		await refreshAllBalances();
 	}
 );

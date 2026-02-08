@@ -10,34 +10,34 @@
 		<div class="card">
 
 			<div class="row">
-				<div class="label">钱包余额</div>
+				<div class="label">Wallet Balance</div>
 				<div class="value mono">
-					<span v-if="!walletAddress">未连接</span>
-					<span v-else-if="balancesLoading">读取中…</span>
+					<span v-if="!walletAddress">Not connected</span>
+					<span v-else-if="balancesLoading">Loading…</span>
 					<span v-else>{{ walletBalanceWithUnit }}</span>
 				</div>
 			</div>
 
 			<div class="row">
-				<div class="label">DEX 余额</div>
+				<div class="label">DEX Balance</div>
 				<div class="value mono">
-					<span v-if="!walletAddress">未连接</span>
-					<span v-else-if="balancesLoading">读取中…</span>
+					<span v-if="!walletAddress">Not connected</span>
+					<span v-else-if="balancesLoading">Loading…</span>
 					<span v-else>{{ dexBalanceWithUnit }}</span>
 				</div>
 			</div>
 
 			<div class="row">
-				<div class="label">总额</div>
+				<div class="label">Total</div>
 				<div class="value mono">
-					<span v-if="!walletAddress">未连接</span>
-					<span v-else-if="balancesLoading">读取中…</span>
+					<span v-if="!walletAddress">Not connected</span>
+					<span v-else-if="balancesLoading">Loading…</span>
 					<span v-else>{{ totalBalanceWithUnit }}</span>
 				</div>
 			</div>
 
 			<div class="form">
-				<label class="inputLabel">数量</label>
+				<label class="inputLabel">Amount</label>
 				<div class="inputWrap">
 					<input
 						v-model="amount"
@@ -52,10 +52,10 @@
 
 			<div class="actions">
 				<button class="cta cta--deposit" type="button" :disabled="busy" @click="onDeposit">
-					{{ busy ? "处理中…" : "充值" }}
+					{{ busy ? "Processing…" : "Deposit" }}
 				</button>
 				<button class="cta cta--withdraw" type="button" :disabled="busy" @click="onWithdraw">
-					{{ busy ? "处理中…" : "提取" }}
+					{{ busy ? "Processing…" : "Withdraw" }}
 				</button>
 			</div>
 
@@ -197,7 +197,7 @@ async function loadMeta() {
 	tokenSymbol.value = String(props.fallbackSymbol || "");
 	tokenDecimals.value = Number.isFinite(Number(props.fallbackDecimals)) ? Number(props.fallbackDecimals) : 18;
 	if (!isAddress(tokenAddr)) {
-		error.value = "tokenAddress 无效";
+		error.value = "Invalid tokenAddress";
 		return;
 	}
 
@@ -209,7 +209,7 @@ async function loadMeta() {
 		tokenSymbol.value = String(symbol || "");
 		tokenDecimals.value = Number(decimals);
 	} catch (e) {
-		error.value = e?.shortMessage || e?.message || "读取 token 元数据失败";
+		error.value = e?.shortMessage || e?.message || "Failed to load token metadata";
 	} finally {
 		metaLoading.value = false;
 	}
@@ -232,7 +232,7 @@ async function refreshBalances() {
 		dexBalance.value = BigInt(db);
 		allowance.value = BigInt(alw);
 	} catch (e) {
-		error.value = e?.shortMessage || e?.message || "读取余额失败";
+		error.value = e?.shortMessage || e?.message || "Failed to load balances";
 	} finally {
 		balancesLoading.value = false;
 	}
@@ -240,15 +240,15 @@ async function refreshBalances() {
 
 function parseAmountOrThrow() {
 	const s = String(amount.value || "").trim();
-	if (!s) throw new Error("请输入数量");
+	if (!s) throw new Error("Enter an amount");
 	const v = parseUnits(s, tokenDecimals.value ?? 18);
-	if (v <= 0n) throw new Error("数量必须大于 0");
+	if (v <= 0n) throw new Error("Amount must be greater than 0");
 	return v;
 }
 
 async function getWriteTokenContract() {
 	const eth = getEthereum();
-	if (!eth?.request) throw new Error("未检测到钱包扩展（window.ethereum）");
+	if (!eth?.request) throw new Error("Wallet extension not detected (window.ethereum).");
 	await ensurePharosChain();
 	await eth.request({ method: "eth_requestAccounts" });
 
@@ -263,7 +263,7 @@ async function ensureAllowance(required) {
 	const trader = String(walletAddress.value || "").trim();
 	if (!trader) {
 		const eth = getEthereum();
-		if (!eth?.request) throw new Error("未检测到钱包扩展（window.ethereum）");
+		if (!eth?.request) throw new Error("Wallet extension not detected (window.ethereum).");
 		await eth.request({ method: "eth_requestAccounts" });
 		await refreshWalletAddress();
 	}
@@ -271,12 +271,12 @@ async function ensureAllowance(required) {
 	await refreshBalances();
 	if (allowance.value >= required) return;
 
-	status.value = "正在授权…";
+	status.value = "Approving...";
 	const token = await getWriteTokenContract();
 	const tx = await token.approve(DEX_ADDRESS, required);
-	status.value = `授权已发送：${tx.hash}`;
+	status.value = `Approval sent: ${tx.hash}`;
 	await tx.wait();
-	status.value = "授权完成";
+	status.value = "Approval complete";
 	await refreshBalances();
 }
 
@@ -286,15 +286,15 @@ async function onDeposit() {
 	busy.value = true;
 	try {
 		const tokenAddr = String(props.tokenAddress || "").trim();
-		if (!isAddress(tokenAddr)) throw new Error("tokenAddress 无效");
+		if (!isAddress(tokenAddr)) throw new Error("Invalid tokenAddress");
 		const v = parseAmountOrThrow();
 		await ensureAllowance(v);
 
-		status.value = "正在充值到 DEX…";
+		status.value = "Depositing to DEX...";
 		const tx = await sendDex("depositBaseFor", tokenAddr, v);
-		status.value = `充值已发送：${tx.hash}`;
+		status.value = `Deposit sent: ${tx.hash}`;
 		await tx.wait();
-		status.value = "充值完成";
+		status.value = "Deposit complete";
 		await refreshBalances();
 	} catch (e) {
 		error.value = e?.shortMessage || e?.message || String(e);
@@ -309,14 +309,14 @@ async function onWithdraw() {
 	busy.value = true;
 	try {
 		const tokenAddr = String(props.tokenAddress || "").trim();
-		if (!isAddress(tokenAddr)) throw new Error("tokenAddress 无效");
+		if (!isAddress(tokenAddr)) throw new Error("Invalid tokenAddress");
 		const v = parseAmountOrThrow();
 
-		status.value = "正在从 DEX 提取…";
+		status.value = "Withdrawing from DEX...";
 		const tx = await sendDex("withdrawBaseFor", tokenAddr, v);
-		status.value = `提取已发送：${tx.hash}`;
+		status.value = `Withdraw sent: ${tx.hash}`;
 		await tx.wait();
-		status.value = "提取完成";
+		status.value = "Withdraw complete";
 		await refreshBalances();
 	} catch (e) {
 		error.value = e?.shortMessage || e?.message || String(e);

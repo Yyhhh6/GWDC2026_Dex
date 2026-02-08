@@ -1,7 +1,7 @@
 <template>
 	<div class="home">
 		<div class="viewSwitch">
-			<span class="label">视图</span>
+			<span class="label">View</span>
 			<div class="seg">
 				<button
 					class="segBtn"
@@ -9,7 +9,7 @@
 					type="button"
 					@click="viewMode = 'grid'"
 				>
-					块状
+					Grid
 				</button>
 				<button
 					class="segBtn"
@@ -17,7 +17,7 @@
 					type="button"
 					@click="viewMode = 'list'"
 				>
-					列表
+					List
 				</button>
 			</div>
 		</div>

@@ -65,7 +65,7 @@
             @click="cancelOrderById(o.id)"
             :disabled="disabled || txBusy || !o.active"
           >
-            取消 
+            Cancel
             <!-- #{{ String(o.id) }} -->
           </button>
         </div>
@@ -128,7 +128,7 @@
       };
     });
   } catch (e) {
-    error.value = e?.shortMessage || e?.message || "读取挂单失败";
+    error.value = e?.shortMessage || e?.message || "Failed to load open orders";
     orders.value = [];
   } finally {
     loading.value = false;

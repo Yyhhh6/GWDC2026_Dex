@@ -35,7 +35,7 @@ export function hasDexAbi() {
 
 export async function ensurePharosChain() {
     const eth = getEthereum();
-    if (!eth?.request) throw new Error("未检测到钱包扩展（window.ethereum）");
+    if (!eth?.request) throw new Error("Wallet extension not detected (window.ethereum).");
 
     const targetChainIdHex = toChainIdHex(PHAROS_ATLANTIC.chainId);
     const current = await eth.request({ method: "eth_chainId" });
@@ -73,16 +73,16 @@ export async function ensurePharosChain() {
 
 export function getDexReadContract() {
     if (!hasDexAbi()) {
-        throw new Error("DEX ABI 为空：请把 src/abi/dex.abi.json 替换为真实 ABI");
+        throw new Error("DEX ABI is empty: replace src/abi/dex.abi.json with the real ABI");
     }
     return new Contract(DEX_ADDRESS, dexAbi, getReadProvider());
 }
 
 export async function getDexWriteContract() {
     const eth = getEthereum();
-    if (!eth?.request) throw new Error("未检测到钱包扩展（window.ethereum）");
+    if (!eth?.request) throw new Error("Wallet extension not detected (window.ethereum).");
     if (!hasDexAbi()) {
-        throw new Error("DEX ABI 为空：请把 src/abi/dex.abi.json 替换为真实 ABI");
+        throw new Error("DEX ABI is empty: replace src/abi/dex.abi.json with the real ABI");
     }
 
     await ensurePharosChain();
@@ -97,7 +97,7 @@ export async function getDexWriteContract() {
 export async function callDex(method, ...args) {
     const c = getDexReadContract();
     const fn = c?.[method];
-    if (typeof fn !== "function") throw new Error(`DEX ABI 中不存在方法：${method}`);
+    if (typeof fn !== "function") throw new Error(`Method not found in DEX ABI: ${method}`);
     return await fn(...args);
 }
 
@@ -105,7 +105,7 @@ export async function callDex(method, ...args) {
 export async function sendDex(method, ...args) {
     const c = await getDexWriteContract();
     const fn = c?.[method];
-    if (typeof fn !== "function") throw new Error(`DEX ABI 中不存在方法：${method}`);
+    if (typeof fn !== "function") throw new Error(`Method not found in DEX ABI: ${method}`);
     return await fn(...args);
 }
 

@@ -12,8 +12,8 @@
   
       <!-- column header -->
       <div class="ob__cols">
-        <div class="c price">价格({{ quoteSymbol || "—" }})</div>
-        <div class="c amount">数量({{ baseSymbol || "—" }})</div>
+        <div class="c price">Price ({{ quoteSymbol || "—" }})</div>
+        <div class="c amount">Amount ({{ baseSymbol || "—" }})</div>
       </div>
   
       <!-- sells (ask) -->
@@ -33,7 +33,7 @@
       <!-- mid price -->
       <div class="ob__mid">
         <div class="ob__midLeft">
-          <span class="lbl">最新</span>
+          <span class="lbl">Last</span>
           <span class="px" :class="midUp ? 'up' : 'down'">
             {{ midPriceDisplay }}
           </span>
@@ -196,7 +196,7 @@
         bar: toBar(r.a),
       }));
     } catch (e) {
-      error.value = e?.shortMessage || e?.message || "读取订单簿失败";
+      error.value = e?.shortMessage || e?.message || "Failed to load order book";
       asks.value = [];
       bids.value = [];
     } finally {
@@ -348,7 +348,7 @@ grid-template-columns: 1.2fr 1fr;
 align-items: center;
 padding: 6px 10px;
   box-sizing: border-box;
-  height: 40px;
+  height: calc(40px * 3 / 3);
 border-radius: 12px;
 background: rgba(255, 255, 255, 0.03);
 border: 1px solid rgba(255, 255, 255, 0.06);
